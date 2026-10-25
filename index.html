@@ -493,8 +493,8 @@
     <div id="toastMessage" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium hidden z-50"></div>
 
     <script>
-        // 구글 앱스 스크립트 연동 URL
-        let DEFAULT_GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwp4ITJAJABf6PlrES1CBy868Mcd3CwRNcv7J74AgYpNM4TnZ9ywaWk-wu53dhvbB-v/exec";
+        // 새로 지정된 구글 앱스 스크립트 연동 URL (독립 컬럼 분리 스크립트 배포용)
+        let DEFAULT_GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbzutzi3jvbklGMDvBF6zYEf3q3HrL6f1U7Xpxy14tWyNwfR2Qmv9ImbVjU2nZ6hmkyI/exec";
 
         const DEFAULT_PROBLEMS = [
             {
@@ -610,7 +610,7 @@
             };
         }
 
-        // Tokenizer & Smart Blank Engine (with strict ASCII operator normalization)
+        // Tokenizer & Smart Blank Engine (strict ASCII operator normalization)
         function generatePythonBlanks(codeStr, blankCount, rng = Math.random) {
             const sanitizedCode = codeStr
                 .replace(/[⩽≤]/g, '<=')
@@ -1142,7 +1142,6 @@
             let totalBlanks = 0;
             let correctBlanks = 0;
             const problemReviews = [];
-            const detailSummaryList = [];
 
             currentExamSession.generatedProblems.forEach((prob, idx) => {
                 const studentAnsMap = currentExamSession.userAnswers[idx] || {};
@@ -1157,7 +1156,6 @@
                     if (isCorrect) correctBlanks++;
 
                     blankResults.push({ key, expected, actual: actual || '(미입력)', isCorrect });
-                    detailSummaryList.push(`[Q${idx + 1}] 입력: ${actual || '(미입력)'} / 정답: ${expected} (${isCorrect ? 'O' : 'X'})`);
                 });
 
                 problemReviews.push({ title: prob.title, blankResults });
@@ -1177,13 +1175,12 @@
                 startTime: currentExamSession.startTimeStr,
                 submittedAt,
                 duration: durationStr,
-                details: detailSummaryList.join(' | '),
                 problemReviews
             };
 
             updateLocalSubmissionRecord('🟢 제출 완료', record);
 
-            // Google Sheets Sync Webhook
+            // Google Sheets Sync Webhook (Post structured payload for separate K, L, M, N... columns)
             if (DEFAULT_GOOGLE_SHEET_URL) {
                 try {
                     fetch(DEFAULT_GOOGLE_SHEET_URL, {
@@ -1346,21 +1343,33 @@
         function exportResultsCSV() {
             if (submissions.length === 0) { showToast('다운로드할 수합 데이터가 없습니다.'); return; }
 
-            const headers = ['학번', '이름', '응시상태', '최종점수', '맞힌빈칸수', '전체빈칸수', '이탈횟수', '시작시간', '종료시간', '소요시간', '응시영역', '문항별세부채점'];
-            const rows = submissions.map(s => [
-                `"${s.studentId || ''}"`,
-                `"${s.studentName || ''}"`,
-                `"${s.status || ''}"`,
-                s.score !== undefined ? `${s.score}점` : '',
-                s.correctBlanks !== undefined ? s.correctBlanks : '',
-                s.totalBlanks !== undefined ? s.totalBlanks : '',
-                `${s.leaveCount || 0}회`,
-                `"${s.startTime || ''}"`,
-                `"${s.submittedAt || ''}"`,
-                `"${s.duration || ''}"`,
-                `"${s.category || ''}"`,
-                `"${s.details || ''}"`
-            ]);
+            const headers = ['학번', '이름', '응시상태', '최종점수', '맞힌빈칸수', '전체빈칸수', '이탈횟수', '시작시간', '종료시간', '소요시간', '응시영역', '문1-1', '문1-2', '문2-1', '문2-2', '문3-1', '문3-2', '문4-1', '문4-2', '문5-1', '문5-2', '문6-1', '문6-2'];
+            
+            const rows = submissions.map(s => {
+                const base = [
+                    `"${s.studentId || ''}"`,
+                    `"${s.studentName || ''}"`,
+                    `"${s.status || ''}"`,
+                    s.score !== undefined ? `${s.score}점` : '',
+                    s.correctBlanks !== undefined ? s.correctBlanks : '',
+                    s.totalBlanks !== undefined ? s.totalBlanks : '',
+                    `${s.leaveCount || 0}회`,
+                    `"${s.startTime || ''}"`,
+                    `"${s.submittedAt || ''}"`,
+                    `"${s.duration || ''}"`,
+                    `"${s.category || ''}"`
+                ];
+
+                const blankAns = [];
+                if (s.problemReviews) {
+                    s.problemReviews.forEach(rev => {
+                        rev.blankResults.forEach(b => {
+                            blankAns.push(`"${b.actual} (${b.isCorrect ? 'O' : 'X'})"`);
+                        });
+                    });
+                }
+                return [...base, ...blankAns];
+            });
 
             const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

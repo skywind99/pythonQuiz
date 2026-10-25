@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyBlank - 파이썬 스마트 실시간 문제풀이 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        .code-font { font-family: 'Fira Code', monospace; }
+        
+        .blank-input {
+            background-color: #0f172a;
+            color: #38bdf8;
+            border: 2px solid #334155;
+            border-radius: 6px;
+            padding: 2px 8px;
+            margin: 0 3px;
+            font-family: 'Fira Code', monospace;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-align: center;
+            transition: all 0.2s ease;
+            outline: none;
+            display: inline-block;
+            vertical-align: baseline;
+        }
+        .blank-input:focus {
+            border-color: #38bdf8;
+            background-color: #020617;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+        }
+        .blank-input.filled {
+            border-color: #10b981;
+            color: #34d399;
+        }
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-sky-500 selection:text-white">
+
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+                    <span class="code-font font-bold text-white text-xl">Py</span>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base sm:text-lg tracking-tight text-white flex items-center gap-2">
+                        PyBlank
+                        <span class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">파이썬 스마트 평가</span>
+                    </h1>
+                </div>
+            </div>
+
+            <!-- Student Exam Header Status -->
+            <div id="examStatusHeader" class="hidden items-center space-x-3 sm:space-x-5">
+                <div class="flex items-center space-x-2 bg-slate-800/90 px-3 py-1.5 rounded-lg border border-slate-700">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="headerStudentInfo" class="text-xs sm:text-sm font-medium text-slate-200"></span>
+                </div>
+                <div id="warningBadge" class="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <span>이탈: <strong id="leaveCountDisplay">0</strong>회</span>
+                </div>
+            </div>
+
+            <!-- Mode Switch Buttons -->
+            <div id="navModeButtons" class="flex items-center space-x-2">
+                <button onclick="switchView('loginView')" id="btnStudentMode" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-sky-600 text-white transition hover:bg-sky-500 shadow-md">
+                    학생 응시
+                </button>
+                <button onclick="requestTeacherAccess()" id="btnTeacherMode" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 transition flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    교사 대시보드
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col">
+
+        <!-- 1. Student Portal / Login View -->
+        <section id="loginView" class="my-auto max-w-lg w-full mx-auto">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+                
+                <div class="mb-6">
+                    <span class="inline-block px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-400 text-xs font-semibold mb-2 border border-indigo-500/20">STUDENT PORTAL</span>
+                    <h2 class="text-2xl font-bold text-white">파이썬 스마트 빈칸 평가</h2>
+                    <p class="text-slate-400 text-sm mt-1">학번과 이름을 입력하고 아래 [시험 시작하기] 버튼을 누르면 즉시 평가가 시작되며, 제출 시 구글 시트로 자동 수합됩니다.</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">학번 (Student ID)</label>
+                        <input type="text" id="studentIdInput" placeholder="예: 20401" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">이름 (Name)</label>
+                        <input type="text" id="studentNameInput" placeholder="예: 김파이" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">응시 영역 선택</label>
+                        <select id="studentCategorySelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                            <option value="RANDOM_6">⚡ 6대 영역별 1문제씩 랜덤 추출 (총 6문제 평가)</option>
+                            <option value="ALL">전체 문제 모두 풀기 (25문제)</option>
+                            <option value="1. 문자열·입출력">1. 문자열 인덱싱 & f-string 입출력 (5문제)</option>
+                            <option value="2. 리스트 활용">2. 리스트(배열) 인덱싱 & 메서드 (2문제)</option>
+                            <option value="3. 연산자 활용">3. 연산자 활용 (4문제)</option>
+                            <option value="4. 조건문(if)">4. 조건문 (if / elif / else) (7문제)</option>
+                            <option value="5. 반복문(for)">5. 반복문 (for) (3문제)</option>
+                            <option value="6. 반복문(while)">6. 반복문 (while) (4문제)</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3.5 text-xs text-amber-300 leading-relaxed">
+                        💡 <strong>시험 진행 안내:</strong> 시작 버튼을 누르면 시험이 개시되며, 시작시간과 종료시간, 총 소요시간 및 점수가 구글 시트에 실시간 기록됩니다.
+                    </div>
+
+                    <button id="btnStartExam" onclick="startExam()" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-sky-500/20 transition transform active:scale-[0.99]">
+                        🚀 시험 시작하기
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Exam Screen (One Question Per Page) -->
+        <section id="examView" class="hidden flex-1 flex flex-col">
+            <!-- Top Progress Bar -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between text-xs sm:text-sm font-medium text-slate-400 mb-2">
+                    <span id="problemProgressText">문제 1 / 6</span>
+                    <span id="answeredStatusText" class="text-sky-400">빈칸을 작성해주세요</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="progressBarFill" class="h-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-300" style="width: 16%"></div>
+                </div>
+            </div>
+
+            <!-- Problem Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl flex-1 flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pb-4 mb-6 border-b border-slate-800">
+                        <div class="flex items-center space-x-2.5">
+                            <span id="currentProblemBadge" class="px-3 py-1 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 font-bold text-sm">Q1</span>
+                            <span id="currentProblemCategory" class="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-semibold text-xs">영역</span>
+                            <h2 id="currentProblemTitle" class="text-lg sm:text-xl font-bold text-white">문제 제목</h2>
+                        </div>
+                        <span class="text-xs text-slate-400 bg-slate-800/80 px-3 py-1 rounded-full">
+                            빈칸 개수: <strong id="currentBlankCount" class="text-sky-400">2</strong>개
+                        </span>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-6">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">문제 설명</h3>
+                        <p id="currentProblemDesc" class="text-slate-200 text-sm sm:text-base leading-relaxed bg-slate-950/60 p-4 rounded-xl border border-slate-800/80"></p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Code Area -->
+                        <div class="lg:col-span-2">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">파이썬 코드 (빈칸에 알맞은 코드 입력)</h3>
+                                <span class="text-[11px] text-slate-500">대소문자 구분 필수</span>
+                            </div>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 overflow-x-auto shadow-inner">
+                                <pre id="codeContainer" class="code-font text-sm sm:text-base leading-9 text-slate-200 no-select"></pre>
+                            </div>
+                        </div>
+
+                        <!-- Expected Output Area -->
+                        <div>
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">실행 출력 예시 (Output)</h3>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 h-[calc(100%-1.75rem)] flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center space-x-1.5 mb-3 pb-2 border-b border-slate-800/80">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500/70"></span>
+                                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500/70"></span>
+                                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/70"></span>
+                                        <span class="text-[11px] text-slate-500 ml-2 code-font">stdout</span>
+                                    </div>
+                                    <pre id="expectedOutputContainer" class="code-font text-sm text-emerald-400 whitespace-pre-wrap"></pre>
+                                </div>
+                                <div class="mt-6 pt-3 border-t border-slate-900 text-[11px] text-slate-500">
+                                    💡 출력 결과가 나오도록 코드의 빈칸을 완성하세요.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Controls -->
+                <div class="mt-8 pt-5 border-t border-slate-800 flex items-center justify-between">
+                    <button id="prevBtn" onclick="navigateProblem(-1)" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        이전
+                    </button>
+
+                    <div id="stepDots" class="flex items-center space-x-2"></div>
+
+                    <div class="flex items-center space-x-3">
+                        <button id="nextBtn" onclick="navigateProblem(1)" class="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm transition flex items-center gap-2 shadow-lg shadow-sky-600/20">
+                            다음
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                        <button id="submitExamBtn" onclick="openSubmitModal()" class="hidden px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+                            최종 제출 및 채점
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Student Result View -->
+        <section id="resultView" class="hidden max-w-4xl w-full mx-auto my-auto">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+                <div class="text-center pb-6 border-b border-slate-800">
+                    <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">제출 및 구글 시트 수합 완료</span>
+                    <h2 class="text-2xl sm:text-3xl font-bold text-white mt-3" id="resultTitle">수고하셨습니다!</h2>
+                    <p class="text-slate-400 text-sm mt-1">답안이 자동 채점되어 교사 대시보드 및 구글 시트로 실시간 전송되었습니다.</p>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto mt-6">
+                        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                            <div class="text-xs text-slate-400">최종 점수</div>
+                            <div id="resultScore" class="text-2xl font-bold text-sky-400 mt-1">100점</div>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                            <div class="text-xs text-slate-400">맞힌 빈칸</div>
+                            <div id="resultCorrectCount" class="text-2xl font-bold text-emerald-400 mt-1">12 / 12</div>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                            <div class="text-xs text-slate-400">소요 시간</div>
+                            <div id="resultDuration" class="text-lg font-bold text-amber-400 mt-1">0분 0초</div>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+                            <div class="text-xs text-slate-400">창 이탈 횟수</div>
+                            <div id="resultLeaveCount" class="text-2xl font-bold text-rose-400 mt-1">0회</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <h3 class="text-sm font-semibold text-slate-300 mb-3">문항별 상세 채점 결과</h3>
+                    <div id="studentReviewList" class="space-y-4 max-h-96 overflow-y-auto pr-1"></div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center">
+                    <button onclick="switchView('loginView')" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium transition">
+                        처음 화면으로
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Teacher Dashboard / Live Control Center -->
+        <section id="teacherView" class="hidden space-y-8">
+            <!-- Top Dashboard Bar -->
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-xl">
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">TEACHER DASHBOARD</span>
+                        <span id="googleSyncBadge" class="text-xs px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 구글 시트 연동 활성화
+                        </span>
+                    </div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-white mt-2">교사 평가 대시보드 & 구글 시트 수합</h2>
+                    <p class="text-sm text-slate-400 mt-0.5">학생이 [시험 시작]을 누르고 최종 제출하면 시작/종료시간, 소요시간, 점수가 구글 시트로 자동 업로드됩니다.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <button onclick="configureGoogleSheetUrl()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 font-medium text-xs border border-slate-700 transition flex items-center gap-1.5">
+                        🔗 구글 시트 URL 설정
+                    </button>
+                    <button onclick="openChangePasswordModal()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 transition">
+                        🔑 비밀번호 변경
+                    </button>
+                    <button onclick="lockTeacherMode()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-400 font-medium text-xs border border-slate-700 transition">
+                        🔒 대시보드 잠금
+                    </button>
+                    <button onclick="exportResultsCSV()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/20">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        수합 결과 CSV 다운로드
+                    </button>
+                </div>
+            </div>
+
+            <!-- Submissions Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-lg text-white flex items-center gap-2">
+                        📊 실시간 학생 응시 현황 및 수합표
+                        <span id="submissionTotalBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-400">0명 참여</span>
+                    </h3>
+                    <button onclick="clearSubmissions()" class="text-xs text-rose-400 hover:text-rose-300 underline">수합 기록 초기화</button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
+                                <th class="py-3 px-4">학번</th>
+                                <th class="py-3 px-4">이름</th>
+                                <th class="py-3 px-4">상태</th>
+                                <th class="py-3 px-4">점수</th>
+                                <th class="py-3 px-4">맞힌 빈칸</th>
+                                <th class="py-3 px-4">이탈 횟수</th>
+                                <th class="py-3 px-4">시작시간</th>
+                                <th class="py-3 px-4">종료시간</th>
+                                <th class="py-3 px-4">소요시간</th>
+                            </tr>
+                        </thead>
+                        <tbody id="submissionsTableBody" class="divide-y divide-slate-800/70 text-slate-200">
+                            <tr><td colspan="9" class="py-8 text-center text-slate-500">실시간 참여 학생 데이터를 기다리고 있습니다...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Problem Management & Question Add Form -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Add New Question -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <h3 class="font-bold text-lg text-white mb-1">➕ 새 파이썬 평가 문제 등록</h3>
+                    <p class="text-xs text-slate-400 mb-4">파이썬 원본 코드만 입력하면 키워드, 함수, 연산자, 변수명이 분석되어 스마트 빈칸이 출제됩니다.</p>
+
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">영역 분류</label>
+                                <select id="newProbCategory" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                                    <option value="1. 문자열·입출력">1. 문자열·입출력</option>
+                                    <option value="2. 리스트 활용">2. 리스트 활용</option>
+                                    <option value="3. 연산자 활용">3. 연산자 활용</option>
+                                    <option value="4. 조건문(if)">4. 조건문(if)</option>
+                                    <option value="5. 반복문(for)">5. 반복문(for)</option>
+                                    <option value="6. 반복문(while)">6. 반복문(while)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">문제 제목</label>
+                                <input type="text" id="newProbTitle" placeholder="예: 리스트 합 구하기" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">빈칸 개수</label>
+                                <input type="number" id="newProbBlanks" value="2" min="1" max="10" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">문제 설명</label>
+                            <input type="text" id="newProbDesc" placeholder="예: 리스트의 원소 합을 출력합니다." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">파이썬 원본 코드</label>
+                            <textarea id="newProbCode" rows="5" placeholder="numbers = [10, 25, 30]&#10;total = sum(numbers)&#10;print(total)" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white code-font focus:outline-none focus:border-sky-500"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">출력 예시</label>
+                            <textarea id="newProbOutput" rows="2" placeholder="65" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-emerald-400 code-font focus:outline-none focus:border-sky-500"></textarea>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button onclick="previewRandomBlanks()" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 font-medium text-xs border border-slate-700 transition">
+                                🎲 빈칸 미리보기
+                            </button>
+                            <button onclick="addNewProblem()" class="flex-1 py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition">
+                                문제 추가
+                            </button>
+                        </div>
+
+                        <div id="previewBox" class="hidden bg-slate-950 border border-slate-800 rounded-xl p-4 mt-3">
+                            <div class="text-xs font-semibold text-sky-400 mb-2">빈칸 추출 테스트</div>
+                            <pre id="previewCodeArea" class="code-font text-xs text-slate-300 whitespace-pre-wrap leading-6"></pre>
+                            <div id="previewAnswerArea" class="mt-2 pt-2 border-t border-slate-800 text-xs text-emerald-400 code-font"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Problem List -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <h3 class="font-bold text-lg text-white">📚 문제 은행 (등록된 문항)</h3>
+                        <div class="flex items-center gap-2">
+                            <select id="teacherCategoryFilter" onchange="renderTeacherDashboard()" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200">
+                                <option value="ALL">전체 영역 보기</option>
+                                <option value="1. 문자열·입출력">1. 문자열·입출력</option>
+                                <option value="2. 리스트 활용">2. 리스트 활용</option>
+                                <option value="3. 연산자 활용">3. 연산자 활용</option>
+                                <option value="4. 조건문(if)">4. 조건문(if)</option>
+                                <option value="5. 반복문(for)">5. 반복문(for)</option>
+                                <option value="6. 반복문(while)">6. 반복문(while)</option>
+                            </select>
+                            <button onclick="resetToDefaultProblems()" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-sky-400 border border-slate-700">기본복원</button>
+                        </div>
+                    </div>
+                    <div id="teacherProblemList" class="space-y-3 overflow-y-auto max-h-[500px] pr-1"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Anti Cheat Modal -->
+    <div id="antiCheatModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-rose-500 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center">
+            <div class="w-14 h-14 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 class="text-xl font-bold text-white">경고! 시험 화면 이탈 감지됨</h3>
+            <p class="text-slate-300 text-sm mt-2 leading-relaxed">
+                다른 탭 이동 또는 창 벗어남이 감지되어 기록 중입니다.<br>
+                누적 이탈 횟수: <strong id="modalLeaveCount" class="text-rose-400 text-base">1회</strong>
+            </p>
+            <button onclick="closeAntiCheatModal()" class="mt-6 w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm transition">
+                시험에 복귀합니다
+            </button>
+        </div>
+    </div>
+
+    <!-- Submit Confirm Modal -->
+    <div id="submitConfirmModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-white">답안을 최종 제출하시겠습니까?</h3>
+            <p id="submitModalMessage" class="text-slate-300 text-sm mt-2 leading-relaxed"></p>
+            <div class="mt-6 flex items-center justify-end space-x-3">
+                <button onclick="closeSubmitModal()" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm font-medium">다시 확인</button>
+                <button onclick="gradeAndSubmitExam()" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold">네, 제출합니다</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teacher Auth Modal -->
+    <div id="teacherPasswordModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">교사 관리자 인증</h3>
+                    <p class="text-xs text-slate-400">초기 비밀번호는 <code class="text-sky-400 font-bold">1234</code> 입니다.</p>
+                </div>
+            </div>
+            <input type="password" id="teacherPasswordInput" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter') verifyTeacherPassword()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition text-sm">
+            <p id="teacherAuthError" class="text-xs text-rose-400 mt-2 hidden">비밀번호가 일치하지 않습니다.</p>
+            <div class="mt-5 flex items-center justify-end space-x-2">
+                <button onclick="closeTeacherPasswordModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm">취소</button>
+                <button onclick="verifyTeacherPassword()" class="px-5 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Change Modal -->
+    <div id="changePasswordModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-1">교사 비밀번호 변경</h3>
+            <p class="text-xs text-slate-400 mb-4">새로운 관리자 비밀번호를 설정하세요.</p>
+            <input type="password" id="newTeacherPasswordInput" placeholder="새 비밀번호" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 text-sm">
+            <div class="mt-5 flex items-center justify-end space-x-2">
+                <button onclick="closeChangePasswordModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm">취소</button>
+                <button onclick="saveNewTeacherPassword()" class="px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notice -->
+    <div id="toastMessage" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium hidden z-50"></div>
+
+    <script>
+        // 구글 앱스 스크립트 연동 URL
+        let DEFAULT_GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbwp4ITJAJABf6PlrES1CBy868Mcd3CwRNcv7J74AgYpNM4TnZ9ywaWk-wu53dhvbB-v/exec";
+
+        const DEFAULT_PROBLEMS = [
+            {
+                id: 'prob_1',
+                category: '1. 문자열·입출력',
+                title: '문1. 문자열 인덱싱과 부분 문자열 슬라이싱',
+                desc: "첫 번째 글자 'H'를 출력하고, 'Python' 부분 문자열을 추출하는 코드입니다.",
+                code: `my_string = "Hello, Python!"\nprint(my_string[0])\nprint(my_string[7:13])`,
+                expectedOutput: `H\nPython`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_2',
+                category: '1. 문자열·입출력',
+                title: '문2. 국어·수학·영어 점수의 평균 f-string 출력',
+                desc: '국어·수학·영어 점수의 평균을 계산하여 f-string으로 출력하는 코드입니다.',
+                code: `name = "홍길동"\nkorean = 90\nmath = 85\nenglish = 92\nprint(f"이름: {name}")\nprint(f"평균: {(korean + math + english) / 3}점")`,
+                expectedOutput: `이름: 홍길동\n평균: 89.0점`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_3',
+                category: '1. 문자열·입출력',
+                title: '문3. 이름과 나이 f-string 출력',
+                desc: '이름과 나이를 바탕으로 10년 후 나이와 2배 나이를 f-string으로 출력하는 코드입니다.',
+                code: `name = "홍길동"\nage = 17\nprint(f"이름: {name}")\nprint(f"10년 후: {age + 10}살")\nprint(f"2배: {age * 2}살")`,
+                expectedOutput: `이름: 홍길동\n10년 후: 27살\n2배: 34살`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_4',
+                category: '2. 리스트 활용',
+                title: '문4. 리스트 첫 번째·마지막 값과 개수 출력',
+                desc: '리스트의 첫 번째·마지막 값과 전체 개수를 f-string으로 출력하는 코드입니다.',
+                code: `fruits = ["사과", "바나나", "포도", "딸기"]\nprint(f"첫 번째 과일: {fruits[0]}")\nprint(f"마지막 과일: {fruits[-1]}")\nprint(f"과일 개수: {len(fruits)}")`,
+                expectedOutput: `첫 번째 과일: 사과\n마지막 과일: 딸기\n과일 개수: 4`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_5',
+                category: '2. 리스트 활용',
+                title: '문5. 점수 리스트 추가·정렬 및 최고·최저점 출력',
+                desc: '점수 리스트에 88점을 추가하고 오름차순 정렬한 뒤 최고점과 최저점을 출력하는 코드입니다.',
+                code: `scores = [85, 72, 96, 63]\nscores.append(88)\nscores.sort()\nprint(scores)\nprint("최고점:", scores[-1])\nprint("최저점:", scores[0])`,
+                expectedOutput: `[63, 72, 85, 88, 96]\n최고점: 96\n최저점: 63`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_8',
+                category: '3. 연산자 활용',
+                title: '문8. 일치(==) 및 불일치(!=) 비교 연산자',
+                desc: '두 값이 같은지 검사하는 연산자와 서로 다른지 검사하는 연산자를 출력하는 코드입니다.',
+                code: `x = 15\ny = 20\nprint(x == y)\nprint(x != y)`,
+                expectedOutput: `False\nTrue`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_12',
+                category: '4. 조건문(if)',
+                title: '문12. 60점 이상 합격/불합격 판별',
+                desc: "입력받은 점수가 60점 이상이면 '합격', 그렇지 않으면 '불합격'을 출력합니다.",
+                code: `score = 75\nif score >= 60:\n    print("합격")\nelse:\n    print("불합격")`,
+                expectedOutput: `합격`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_19',
+                category: '5. 반복문(for)',
+                title: '문19. range를 이용해 2부터 6까지 정수 출력',
+                desc: '2부터 6까지의 정수를 1씩 증가시키며 출력하는 코드입니다.',
+                code: `for i in range(2, 7):\n    print(i)`,
+                expectedOutput: `2\n3\n4\n5\n6`,
+                blankCount: 2
+            },
+            {
+                id: 'prob_22',
+                category: '6. 반복문(while)',
+                title: '문22. 1부터 5까지 출력하는 while문',
+                desc: '1부터 5까지 숫자를 차례대로 출력하고 종료되는 while문 코드입니다.',
+                code: `count = 1\nwhile count <= 5:\n    print(count)\n    count += 1`,
+                expectedOutput: `1\n2\n3\n4\n5`,
+                blankCount: 2
+            }
+        ];
+
+        let problems = [];
+        let submissions = [];
+        let teacherPassword = '1234';
+        let isTeacherAuthenticated = false;
+
+        let currentExamSession = {
+            active: false,
+            studentId: '',
+            studentName: '',
+            category: '',
+            leaveCount: 0,
+            currentIndex: 0,
+            startTimeStamp: 0,
+            startTimeStr: '',
+            generatedProblems: [],
+            userAnswers: {}
+        };
+
+        function createSeededRandom(seedStr) {
+            let h = 2166136261 >>> 0;
+            for (let i = 0; i < seedStr.length; i++) {
+                h = Math.imul(h ^ seedStr.charCodeAt(i), 16777619);
+            }
+            return function() {
+                h += h << 13; h ^= h >>> 7;
+                h += h << 3;  h ^= h >>> 17;
+                return ((h += h << 5) >>> 0) / 4294967296;
+            };
+        }
+
+        // Tokenizer & Smart Blank Engine (with strict ASCII operator normalization)
+        function generatePythonBlanks(codeStr, blankCount, rng = Math.random) {
+            const sanitizedCode = codeStr
+                .replace(/[⩽≤]/g, '<=')
+                .replace(/[⩾≥]/g, '>=')
+                .replace(/≠/g, '!=');
+
+            const tokenRegex = /(#.*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\b\d+(?:\.\d+)?\b)|(==|!=|<=|>=|\/\/|\*\*|\+=|-=|\*=|\/=|%=|->)|([+\-*/%=<>:&|^~!,().:\[\]{}])|([A-Za-z_][A-Za-z0-9_]*)|(\s+)/g;
+
+            const tokens = [];
+            let match;
+            while ((match = tokenRegex.exec(sanitizedCode)) !== null) {
+                const [full, comment, strLit, numLit, multiOp, singleOp, ident, ws] = match;
+                let type = 'OTHER';
+                if (comment) type = 'COMMENT';
+                else if (strLit) type = 'STRING';
+                else if (numLit) type = 'NUMBER';
+                else if (multiOp || singleOp) type = 'OP';
+                else if (ident) type = 'NAME';
+                else if (ws) type = 'WS';
+
+                tokens.push({ type, value: full });
+            }
+
+            const getPrevNonWsToken = (idx) => {
+                for (let k = idx - 1; k >= 0; k--) {
+                    if (tokens[k].type !== 'WS' && tokens[k].type !== 'COMMENT') return tokens[k];
+                }
+                return null;
+            };
+
+            const bracketStack = [];
+            const candidateIndices = [];
+
+            for (let i = 0; i < tokens.length; i++) {
+                const tok = tokens[i];
+                if (tok.type === 'OP') {
+                    if (tok.value === '[') {
+                        const prev = getPrevNonWsToken(i);
+                        const isIndexing = prev && (prev.type === 'NAME' || prev.value === ']' || prev.value === ')');
+                        bracketStack.push(isIndexing ? 'INDEX' : 'LIST_LITERAL');
+                        continue;
+                    }
+                    if (tok.value === ']') { bracketStack.pop(); continue; }
+                    if (!['(', ')', '[', ']', '{', '}', ','].includes(tok.value)) {
+                        candidateIndices.push(i);
+                    }
+                    continue;
+                }
+                if (tok.type === 'NAME') { candidateIndices.push(i); continue; }
+                if (tok.type === 'NUMBER') {
+                    if (bracketStack[bracketStack.length - 1] === 'INDEX') {
+                        candidateIndices.push(i);
+                    }
+                }
+            }
+
+            const shuffled = [...candidateIndices];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            const targetCount = Math.min(blankCount, shuffled.length);
+            const selectedSet = new Set(shuffled.slice(0, targetCount));
+
+            const answers = {};
+            const segments = [];
+            let blankNumber = 1;
+
+            for (let i = 0; i < tokens.length; i++) {
+                if (selectedSet.has(i)) {
+                    const key = `blank_${blankNumber}`;
+                    answers[key] = tokens[i].value;
+                    segments.push({ isBlank: true, key, answer: tokens[i].value });
+                    blankNumber++;
+                } else {
+                    segments.push({ isBlank: false, text: tokens[i].value });
+                }
+            }
+
+            return { segments, answers };
+        }
+
+        // Dynamic Logical Equivalence Evaluator
+        function isCorrectAnswer(expected, actual, contextProbId = '') {
+            const exp = expected.trim();
+            const act = actual.trim();
+
+            if (exp === act) return true;
+
+            const normQuote = (s) => {
+                if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+                    return `'${s.slice(1, -1)}'`;
+                }
+                return s;
+            };
+            if (normQuote(exp) === normQuote(act)) return true;
+
+            // When x=15, y=20: any operator that evaluates x [op] y to False
+            if (exp === '==' && (act === '>' || act === '>=' || act === '==')) {
+                return true;
+            }
+
+            // When x=15, y=20: any operator that evaluates x [op] y to True
+            if (exp === '!=' && (act === '<' || act === '<=' || act === '!=')) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function initApp() {
+            const savedProbs = localStorage.getItem('pyblank_problems_v6');
+            if (savedProbs) {
+                try { problems = JSON.parse(savedProbs); } catch (e) { problems = [...DEFAULT_PROBLEMS]; }
+            } else {
+                problems = [...DEFAULT_PROBLEMS];
+                saveProblems();
+            }
+
+            const cachedSubs = localStorage.getItem('pyblank_cache_submissions_v6');
+            if (cachedSubs) {
+                try { submissions = JSON.parse(cachedSubs); } catch (e) { submissions = []; }
+            }
+
+            const savedPwd = localStorage.getItem('pyblank_teacher_pwd');
+            if (savedPwd) teacherPassword = savedPwd;
+
+            const savedSheetUrl = localStorage.getItem('pyblank_google_sheet_url');
+            if (savedSheetUrl) DEFAULT_GOOGLE_SHEET_URL = savedSheetUrl;
+
+            setupAntiCheatListeners();
+        }
+
+        function saveProblems() {
+            localStorage.setItem('pyblank_problems_v6', JSON.stringify(problems));
+        }
+
+        function saveSubmissions() {
+            localStorage.setItem('pyblank_cache_submissions_v6', JSON.stringify(submissions));
+        }
+
+        function resetToDefaultProblems() {
+            problems = [...DEFAULT_PROBLEMS];
+            saveProblems();
+            renderTeacherDashboard();
+            showToast('기본 문제 은행으로 복원되었습니다.');
+        }
+
+        function configureGoogleSheetUrl() {
+            const currentUrl = localStorage.getItem('pyblank_google_sheet_url') || DEFAULT_GOOGLE_SHEET_URL;
+            const newUrl = prompt('구글 시트 Apps Script 웹앱 URL을 입력하세요:', currentUrl);
+            if (newUrl !== null) {
+                const trimmed = newUrl.trim();
+                if (trimmed) {
+                    localStorage.setItem('pyblank_google_sheet_url', trimmed);
+                    DEFAULT_GOOGLE_SHEET_URL = trimmed;
+                    showToast('구글 시트 연동 URL이 저장되었습니다.');
+                }
+            }
+        }
+
+        // Anti-Cheat System
+        let lastLeaveTimestamp = 0;
+        function setupAntiCheatListeners() {
+            const triggerLeaveWarning = () => {
+                if (!currentExamSession.active) return;
+                const now = Date.now();
+                if (now - lastLeaveTimestamp < 800) return;
+                lastLeaveTimestamp = now;
+
+                currentExamSession.leaveCount++;
+                document.getElementById('leaveCountDisplay').textContent = currentExamSession.leaveCount;
+                document.getElementById('modalLeaveCount').textContent = `${currentExamSession.leaveCount}회`;
+
+                updateLocalSubmissionRecord('⚠️ 응시 중 (이탈 경고)');
+
+                const modal = document.getElementById('antiCheatModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            };
+
+            document.addEventListener('visibilitychange', () => { if (document.hidden) triggerLeaveWarning(); });
+            window.addEventListener('blur', () => triggerLeaveWarning());
+            window.addEventListener('beforeunload', (e) => {
+                if (currentExamSession.active) { e.preventDefault(); e.returnValue = ''; }
+            });
+        }
+
+        function closeAntiCheatModal() {
+            const modal = document.getElementById('antiCheatModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Teacher Password & Auth Modals
+        function requestTeacherAccess() {
+            if (currentExamSession.active) {
+                showToast('시험 응시 중에는 교사 대시보드로 이동할 수 없습니다.');
+                return;
+            }
+            if (isTeacherAuthenticated) {
+                switchView('teacherView');
+                return;
+            }
+            const modal = document.getElementById('teacherPasswordModal');
+            const input = document.getElementById('teacherPasswordInput');
+            input.value = '';
+            document.getElementById('teacherAuthError').classList.add('hidden');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function closeTeacherPasswordModal() {
+            const modal = document.getElementById('teacherPasswordModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function verifyTeacherPassword() {
+            const input = document.getElementById('teacherPasswordInput');
+            if (input.value === teacherPassword) {
+                isTeacherAuthenticated = true;
+                closeTeacherPasswordModal();
+                switchView('teacherView');
+                showToast('교사 대시보드에 접속하였습니다.');
+            } else {
+                document.getElementById('teacherAuthError').classList.remove('hidden');
+            }
+        }
+
+        function lockTeacherMode() {
+            isTeacherAuthenticated = false;
+            switchView('loginView');
+            showToast('교사 대시보드가 잠금 처리되었습니다.');
+        }
+
+        function openChangePasswordModal() {
+            const modal = document.getElementById('changePasswordModal');
+            document.getElementById('newTeacherPasswordInput').value = '';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeChangePasswordModal() {
+            const modal = document.getElementById('changePasswordModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveNewTeacherPassword() {
+            const newPwd = document.getElementById('newTeacherPasswordInput').value.trim();
+            if (!newPwd) { showToast('새 비밀번호를 입력하세요.'); return; }
+            teacherPassword = newPwd;
+            localStorage.setItem('pyblank_teacher_pwd', teacherPassword);
+            closeChangePasswordModal();
+            showToast('교사 비밀번호가 변경되었습니다.');
+        }
+
+        function switchView(viewId) {
+            if (currentExamSession.active && viewId !== 'examView') {
+                showToast('시험 응시 중에는 이동할 수 없습니다.');
+                return;
+            }
+            ['loginView', 'examView', 'resultView', 'teacherView'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(viewId).classList.remove('hidden');
+
+            if (viewId === 'teacherView') renderTeacherDashboard();
+        }
+
+        function updateLocalSubmissionRecord(statusText, extraData = {}) {
+            const recordData = {
+                studentId: currentExamSession.studentId,
+                studentName: currentExamSession.studentName,
+                category: currentExamSession.category,
+                status: statusText,
+                leaveCount: currentExamSession.leaveCount,
+                startTime: currentExamSession.startTimeStr,
+                timestamp: Date.now(),
+                ...extraData
+            };
+
+            const idx = submissions.findIndex(s => s.studentId === currentExamSession.studentId && s.studentName === currentExamSession.studentName);
+            if (idx >= 0) {
+                submissions[idx] = { ...submissions[idx], ...recordData };
+            } else {
+                submissions.unshift(recordData);
+            }
+            saveSubmissions();
+        }
+
+        // Student Exam Lifecycle
+        function startExam() {
+            const studentId = document.getElementById('studentIdInput').value.trim();
+            const studentName = document.getElementById('studentNameInput').value.trim();
+            const selectedCategory = document.getElementById('studentCategorySelect').value;
+
+            if (!studentId || !studentName) {
+                showToast('학번과 이름을 모두 입력해주세요.');
+                return;
+            }
+
+            const rng = createSeededRandom(`${studentId}_${studentName}_${Date.now()}`);
+
+            let targetProblems = [];
+            if (selectedCategory === 'RANDOM_6') {
+                const categories = ['1. 문자열·입출력', '2. 리스트 활용', '3. 연산자 활용', '4. 조건문(if)', '5. 반복문(for)', '6. 반복문(while)'];
+                categories.forEach(cat => {
+                    const catProbs = problems.filter(p => p.category === cat);
+                    if (catProbs.length > 0) {
+                        targetProblems.push(catProbs[Math.floor(rng() * catProbs.length)]);
+                    }
+                });
+            } else if (selectedCategory === 'ALL') {
+                targetProblems = [...problems];
+            } else {
+                targetProblems = problems.filter(p => p.category === selectedCategory);
+            }
+
+            if (targetProblems.length === 0) {
+                showToast('해당 영역에 문제가 없습니다.');
+                return;
+            }
+
+            const shuffled = [...targetProblems];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            const generatedProblems = shuffled.map(p => {
+                const { segments, answers } = generatePythonBlanks(p.code, p.blankCount || 2, rng);
+                return { ...p, segments, answers };
+            });
+
+            const now = new Date();
+            const startTimeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            currentExamSession = {
+                active: true,
+                studentId,
+                studentName,
+                category: selectedCategory,
+                leaveCount: 0,
+                currentIndex: 0,
+                startTimeStamp: now.getTime(),
+                startTimeStr,
+                generatedProblems,
+                userAnswers: {}
+            };
+
+            generatedProblems.forEach((_, idx) => { currentExamSession.userAnswers[idx] = {}; });
+
+            document.getElementById('navModeButtons').classList.add('hidden');
+            const examHeader = document.getElementById('examStatusHeader');
+            examHeader.classList.remove('hidden');
+            examHeader.classList.add('flex');
+            document.getElementById('headerStudentInfo').textContent = `${studentId} ${studentName}`;
+            document.getElementById('leaveCountDisplay').textContent = '0';
+
+            updateLocalSubmissionRecord('🔵 응시 중');
+
+            switchView('examView');
+            renderCurrentProblem();
+        }
+
+        function renderCurrentProblem() {
+            const idx = currentExamSession.currentIndex;
+            const total = currentExamSession.generatedProblems.length;
+            const prob = currentExamSession.generatedProblems[idx];
+            const savedAns = currentExamSession.userAnswers[idx] || {};
+
+            document.getElementById('problemProgressText').textContent = `문제 ${idx + 1} / ${total}`;
+            document.getElementById('progressBarFill').style.width = `${((idx + 1) / total) * 100}%`;
+
+            document.getElementById('currentProblemBadge').textContent = `Q${idx + 1}`;
+            document.getElementById('currentProblemCategory').textContent = prob.category || '일반';
+            document.getElementById('currentProblemTitle').textContent = prob.title;
+            document.getElementById('currentProblemDesc').textContent = prob.desc;
+            document.getElementById('expectedOutputContainer').textContent = prob.expectedOutput;
+
+            document.getElementById('currentBlankCount').textContent = Object.keys(prob.answers).length;
+
+            const codeContainer = document.getElementById('codeContainer');
+            codeContainer.innerHTML = '';
+
+            prob.segments.forEach(seg => {
+                if (!seg.isBlank) {
+                    const span = document.createElement('span');
+                    span.textContent = seg.text;
+                    codeContainer.appendChild(span);
+                } else {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.autocomplete = 'off';
+                    input.dataset.key = seg.key;
+                    const currentVal = savedAns[seg.key] || '';
+                    input.value = currentVal;
+                    input.style.width = `${Math.max(6, Math.min(16, seg.answer.length + 3))}ch`;
+                    input.placeholder = seg.key.replace('blank_', '#');
+                    input.className = `blank-input ${currentVal.trim() ? 'filled' : ''}`;
+
+                    input.addEventListener('input', (e) => {
+                        const val = e.target.value;
+                        currentExamSession.userAnswers[idx][seg.key] = val;
+                        if (val.trim()) e.target.classList.add('filled');
+                        else e.target.classList.remove('filled');
+                        updateAnsweredStatus();
+                    });
+
+                    codeContainer.appendChild(input);
+                }
+            });
+
+            document.getElementById('prevBtn').disabled = (idx === 0);
+            const nextBtn = document.getElementById('nextBtn');
+            const submitBtn = document.getElementById('submitExamBtn');
+
+            if (idx === total - 1) {
+                nextBtn.classList.add('hidden');
+                submitBtn.classList.remove('hidden');
+            } else {
+                nextBtn.classList.remove('hidden');
+                submitBtn.classList.add('hidden');
+            }
+
+            renderStepDots();
+            updateAnsweredStatus();
+        }
+
+        function updateAnsweredStatus() {
+            const idx = currentExamSession.currentIndex;
+            const prob = currentExamSession.generatedProblems[idx];
+            const ansMap = currentExamSession.userAnswers[idx] || {};
+            const totalBlanks = Object.keys(prob.answers).length;
+            let filledCount = 0;
+
+            Object.keys(prob.answers).forEach(k => {
+                if ((ansMap[k] || '').trim()) filledCount++;
+            });
+
+            const statusEl = document.getElementById('answeredStatusText');
+            if (filledCount === totalBlanks) {
+                statusEl.textContent = `빈칸 작성 완료 (${filledCount}/${totalBlanks})`;
+                statusEl.className = 'text-emerald-400 font-semibold';
+            } else {
+                statusEl.textContent = `작성 중 (${filledCount}/${totalBlanks} 입력됨)`;
+                statusEl.className = 'text-sky-400';
+            }
+            renderStepDots();
+        }
+
+        function renderStepDots() {
+            const dotsContainer = document.getElementById('stepDots');
+            dotsContainer.innerHTML = '';
+
+            currentExamSession.generatedProblems.forEach((prob, i) => {
+                const ansMap = currentExamSession.userAnswers[i] || {};
+                const keys = Object.keys(prob.answers);
+                const allFilled = keys.every(k => (ansMap[k] || '').trim().length > 0);
+
+                const btn = document.createElement('button');
+                btn.onclick = () => { currentExamSession.currentIndex = i; renderCurrentProblem(); };
+
+                if (i === currentExamSession.currentIndex) {
+                    btn.className = 'w-8 h-8 rounded-lg font-bold text-xs bg-sky-500 text-white shadow-md shadow-sky-500/30';
+                } else if (allFilled) {
+                    btn.className = 'w-8 h-8 rounded-lg font-semibold text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+                } else {
+                    btn.className = 'w-8 h-8 rounded-lg font-medium text-xs bg-slate-800 text-slate-400';
+                }
+                btn.textContent = i + 1;
+                dotsContainer.appendChild(btn);
+            });
+        }
+
+        function navigateProblem(dir) {
+            const nextIdx = currentExamSession.currentIndex + dir;
+            if (nextIdx >= 0 && nextIdx < currentExamSession.generatedProblems.length) {
+                currentExamSession.currentIndex = nextIdx;
+                renderCurrentProblem();
+            }
+        }
+
+        function openSubmitModal() {
+            let totalBlanks = 0, filledBlanks = 0;
+            currentExamSession.generatedProblems.forEach((prob, idx) => {
+                const ansMap = currentExamSession.userAnswers[idx] || {};
+                Object.keys(prob.answers).forEach(k => {
+                    totalBlanks++;
+                    if ((ansMap[k] || '').trim()) filledBlanks++;
+                });
+            });
+
+            const unfilled = totalBlanks - filledBlanks;
+            const msgEl = document.getElementById('submitModalMessage');
+            if (unfilled > 0) {
+                msgEl.innerHTML = `채우지 않은 빈칸이 <strong class="text-amber-400">${unfilled}개</strong> 있습니다.<br>제출하시겠습니까?`;
+            } else {
+                msgEl.innerHTML = `모든 빈칸(${totalBlanks}개)을 작성하셨습니다.<br>제출하시겠습니까?`;
+            }
+
+            const modal = document.getElementById('submitConfirmModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeSubmitModal() {
+            const modal = document.getElementById('submitConfirmModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function gradeAndSubmitExam() {
+            closeSubmitModal();
+
+            const endTime = new Date();
+            const submittedAt = endTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const diffMs = endTime.getTime() - currentExamSession.startTimeStamp;
+            const totalSec = Math.floor(diffMs / 1000);
+            const durationMin = Math.floor(totalSec / 60);
+            const durationSec = totalSec % 60;
+            const durationStr = `${durationMin}분 ${durationSec}초`;
+
+            let totalBlanks = 0;
+            let correctBlanks = 0;
+            const problemReviews = [];
+            const detailSummaryList = [];
+
+            currentExamSession.generatedProblems.forEach((prob, idx) => {
+                const studentAnsMap = currentExamSession.userAnswers[idx] || {};
+                const blankResults = [];
+
+                Object.keys(prob.answers).forEach(key => {
+                    totalBlanks++;
+                    const expected = prob.answers[key].trim();
+                    const actual = (studentAnsMap[key] || '').trim();
+
+                    const isCorrect = isCorrectAnswer(expected, actual, prob.id);
+                    if (isCorrect) correctBlanks++;
+
+                    blankResults.push({ key, expected, actual: actual || '(미입력)', isCorrect });
+                    detailSummaryList.push(`[Q${idx + 1}] 입력: ${actual || '(미입력)'} / 정답: ${expected} (${isCorrect ? 'O' : 'X'})`);
+                });
+
+                problemReviews.push({ title: prob.title, blankResults });
+            });
+
+            const score = totalBlanks > 0 ? Math.round((correctBlanks / totalBlanks) * 100) : 0;
+
+            const record = {
+                studentId: currentExamSession.studentId,
+                studentName: currentExamSession.studentName,
+                category: currentExamSession.category,
+                status: '🟢 제출 완료',
+                score,
+                correctBlanks,
+                totalBlanks,
+                leaveCount: currentExamSession.leaveCount,
+                startTime: currentExamSession.startTimeStr,
+                submittedAt,
+                duration: durationStr,
+                details: detailSummaryList.join(' | '),
+                problemReviews
+            };
+
+            updateLocalSubmissionRecord('🟢 제출 완료', record);
+
+            // Google Sheets Sync Webhook
+            if (DEFAULT_GOOGLE_SHEET_URL) {
+                try {
+                    fetch(DEFAULT_GOOGLE_SHEET_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(record)
+                    }).catch(err => console.error("Google sheet sync error:", err));
+                } catch (e) {
+                    console.error("Google Sheet webhook failed:", e);
+                }
+            }
+
+            currentExamSession.active = false;
+            document.getElementById('examStatusHeader').classList.add('hidden');
+            document.getElementById('navModeButtons').classList.remove('hidden');
+
+            document.getElementById('resultTitle').textContent = `${currentExamSession.studentName}(${currentExamSession.studentId}) 학생 채점 결과`;
+            document.getElementById('resultScore').textContent = `${score}점`;
+            document.getElementById('resultCorrectCount').textContent = `${correctBlanks} / ${totalBlanks}`;
+            document.getElementById('resultDuration').textContent = durationStr;
+            document.getElementById('resultLeaveCount').textContent = `${currentExamSession.leaveCount}회`;
+
+            const reviewList = document.getElementById('studentReviewList');
+            reviewList.innerHTML = '';
+
+            problemReviews.forEach((rev, i) => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-950 border border-slate-800 rounded-xl p-4';
+
+                const badgesHtml = rev.blankResults.map((b, bIdx) => {
+                    if (b.isCorrect) {
+                        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs code-font">
+                            #${bIdx + 1} 정답: <strong>${escapeHtml(b.expected)}</strong> ✓
+                        </span>`;
+                    } else {
+                        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs code-font">
+                            #${bIdx + 1} 내 답: <del>${escapeHtml(b.actual)}</del> → 정답: <strong class="text-emerald-400">${escapeHtml(b.expected)}</strong>
+                        </span>`;
+                    }
+                }).join(' ');
+
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-white mb-2">문항 ${i + 1}. ${escapeHtml(rev.title)}</div>
+                    <div class="flex flex-wrap gap-2">${badgesHtml}</div>
+                `;
+                reviewList.appendChild(card);
+            });
+
+            switchView('resultView');
+        }
+
+        function renderTeacherDashboard() {
+            document.getElementById('submissionTotalBadge').textContent = `${submissions.length}명 참여`;
+            const tbody = document.getElementById('submissionsTableBody');
+            tbody.innerHTML = '';
+
+            if (submissions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">실시간 참여 학생 데이터를 기다리고 있습니다...</td></tr>`;
+            } else {
+                submissions.forEach(sub => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-800/40 transition';
+                    const leaveBadge = sub.leaveCount > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-400';
+                    const statusBadgeClass = sub.status && sub.status.includes('제출') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-sky-500/20 text-sky-400';
+
+                    tr.innerHTML = `
+                        <td class="py-3 px-4 font-mono text-xs">${escapeHtml(sub.studentId || '-')}</td>
+                        <td class="py-3 px-4 font-semibold text-white">${escapeHtml(sub.studentName || '-')}</td>
+                        <td class="py-3 px-4"><span class="px-2.5 py-1 rounded text-xs font-semibold ${statusBadgeClass}">${escapeHtml(sub.status || '🔵 응시 중')}</span></td>
+                        <td class="py-3 px-4 font-bold text-sky-400">${sub.score !== undefined ? sub.score + '점' : '-'}</td>
+                        <td class="py-3 px-4 text-emerald-400">${sub.correctBlanks !== undefined ? `${sub.correctBlanks}/${sub.totalBlanks}` : '-'}</td>
+                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs ${leaveBadge}">${sub.leaveCount || 0}회</span></td>
+                        <td class="py-3 px-4 text-xs text-slate-400">${escapeHtml(sub.startTime || '-')}</td>
+                        <td class="py-3 px-4 text-xs text-slate-400">${escapeHtml(sub.submittedAt || '-')}</td>
+                        <td class="py-3 px-4 text-xs text-amber-300 font-medium">${escapeHtml(sub.duration || '-')}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            const filterCat = document.getElementById('teacherCategoryFilter')?.value || 'ALL';
+            const filteredProbs = filterCat === 'ALL' ? problems : problems.filter(p => p.category === filterCat);
+            const probList = document.getElementById('teacherProblemList');
+            probList.innerHTML = '';
+
+            filteredProbs.forEach((p) => {
+                const item = document.createElement('div');
+                item.className = 'bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col gap-2';
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-semibold">${escapeHtml(p.category || '일반')}</span>
+                        <button onclick="deleteProblem('${p.id}')" class="text-xs text-rose-400 hover:text-rose-300">삭제</button>
+                    </div>
+                    <div class="font-bold text-sm text-white">${escapeHtml(p.title)}</div>
+                    <p class="text-xs text-slate-400">${escapeHtml(p.desc)}</p>
+                    <pre class="p-2 rounded bg-slate-900 text-xs code-font text-slate-300 overflow-x-auto">${escapeHtml(p.code)}</pre>
+                `;
+                probList.appendChild(item);
+            });
+        }
+
+        function previewRandomBlanks() {
+            const code = document.getElementById('newProbCode').value.trim();
+            const blankCount = parseInt(document.getElementById('newProbBlanks').value, 10) || 2;
+            if (!code) { showToast('파이썬 코드를 먼저 입력하세요.'); return; }
+
+            const { segments, answers } = generatePythonBlanks(code, blankCount);
+            const previewBox = document.getElementById('previewBox');
+            previewBox.classList.remove('hidden');
+
+            document.getElementById('previewCodeArea').innerHTML = segments.map(s => {
+                if (s.isBlank) return `<span class="px-1.5 py-0.5 bg-sky-500/20 text-sky-300 font-bold">[${s.key}]</span>`;
+                return escapeHtml(s.text);
+            }).join('');
+
+            const ansText = Object.entries(answers).map(([k, v]) => `${k}: ${v}`).join(' | ');
+            document.getElementById('previewAnswerArea').textContent = `정답 추출: ${ansText}`;
+        }
+
+        function addNewProblem() {
+            const category = document.getElementById('newProbCategory').value;
+            const title = document.getElementById('newProbTitle').value.trim();
+            const desc = document.getElementById('newProbDesc').value.trim();
+            const code = document.getElementById('newProbCode').value.trim();
+            const expectedOutput = document.getElementById('newProbOutput').value.trim();
+            const blankCount = parseInt(document.getElementById('newProbBlanks').value, 10) || 2;
+
+            if (!title || !code || !expectedOutput) {
+                showToast('필수 항목을 모두 입력해주세요.');
+                return;
+            }
+
+            problems.push({ id: 'prob_' + Date.now(), category, title, desc: desc || '코드의 빈칸을 채우세요.', code, expectedOutput, blankCount });
+            saveProblems();
+            renderTeacherDashboard();
+
+            document.getElementById('newProbTitle').value = '';
+            document.getElementById('newProbDesc').value = '';
+            document.getElementById('newProbCode').value = '';
+            document.getElementById('newProbOutput').value = '';
+            document.getElementById('previewBox').classList.add('hidden');
+            showToast('새 문제가 추가되었습니다!');
+        }
+
+        function deleteProblem(probId) {
+            problems = problems.filter(p => p.id !== probId);
+            saveProblems();
+            renderTeacherDashboard();
+            showToast('문제가 삭제되었습니다.');
+        }
+
+        function clearSubmissions() {
+            submissions = [];
+            saveSubmissions();
+            renderTeacherDashboard();
+            showToast('제출 기록이 초기화되었습니다.');
+        }
+
+        function exportResultsCSV() {
+            if (submissions.length === 0) { showToast('다운로드할 수합 데이터가 없습니다.'); return; }
+
+            const headers = ['학번', '이름', '응시상태', '최종점수', '맞힌빈칸수', '전체빈칸수', '이탈횟수', '시작시간', '종료시간', '소요시간', '응시영역', '문항별세부채점'];
+            const rows = submissions.map(s => [
+                `"${s.studentId || ''}"`,
+                `"${s.studentName || ''}"`,
+                `"${s.status || ''}"`,
+                s.score !== undefined ? `${s.score}점` : '',
+                s.correctBlanks !== undefined ? s.correctBlanks : '',
+                s.totalBlanks !== undefined ? s.totalBlanks : '',
+                `${s.leaveCount || 0}회`,
+                `"${s.startTime || ''}"`,
+                `"${s.submittedAt || ''}"`,
+                `"${s.duration || ''}"`,
+                `"${s.category || ''}"`,
+                `"${s.details || ''}"`
+            ]);
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `파이썬_평가수합_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        let toastTimer = null;
+        function showToast(msg) {
+            const toast = document.getElementById('toastMessage');
+            toast.textContent = msg;
+            toast.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        window.renderTeacherDashboard = renderTeacherDashboard;
+        window.showToast = showToast;
+        window.onload = initApp;
+    </script>
+</body>
+</html>

@@ -668,6 +668,8 @@
                 code: `n = int(input())\nif n % 2 == 0:\n    print(f"{n}은 짝수입니다.")\nelse:\n    print(f"{n}은 홀수입니다.")`,
                 expectedOutput: `7은 홀수입니다.`,
                 blankCount: 2
+            },
+
             // [영역 5] 반복문(for) 기초 (문19, 문20)
             {
                 id: 'prob_19',
@@ -700,6 +702,7 @@
             }
         ];
 
+        // Global State
         let problems = [];
         let submissions = [];
         let teacherPassword = '1234';
@@ -709,11 +712,11 @@
             active: false,
             studentId: '',
             studentName: '',
-            category: '',
             leaveCount: 0,
             currentIndex: 0,
+            startTime: '',
             startTimeStamp: 0,
-            startTimeStr: '',
+            category: 'RANDOM_6',
             generatedProblems: [],
             userAnswers: {}
         };
@@ -730,28 +733,22 @@
             };
         }
 
-        // Tokenizer & Smart Blank Engine
-        // Rules:
-        // 1. Excludes 'print' keyword entirely from becoming a blank.
-        // 2. Strict ASCII operator display (>=, <=, ==, !=).
-        // 3. NO DUPLICATE BLANKS WITHIN A SINGLE QUESTION (Each blank must be a unique token value).
+        // Smart tokenizer & blank extractor:
+        // - Ignores 'print' keyword
+        // - Avoids picking duplicate answer tokens in the same problem
         function generatePythonBlanks(codeStr, blankCount, rng = Math.random) {
-            const sanitizedCode = codeStr
-                .replace(/[⩽≤]/g, '<=')
-                .replace(/[⩾≥]/g, '>=')
-                .replace(/≠/g, '!=');
-
             const tokenRegex = /(#.*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\b\d+(?:\.\d+)?\b)|(==|!=|<=|>=|\/\/|\*\*|\+=|-=|\*=|\/=|%=|->)|([+\-*/%=<>:&|^~!,().:\[\]{}])|([A-Za-z_][A-Za-z0-9_]*)|(\s+)/g;
 
             const tokens = [];
             let match;
-            while ((match = tokenRegex.exec(sanitizedCode)) !== null) {
+            while ((match = tokenRegex.exec(codeStr)) !== null) {
                 const [full, comment, strLit, numLit, multiOp, singleOp, ident, ws] = match;
                 let type = 'OTHER';
                 if (comment) type = 'COMMENT';
                 else if (strLit) type = 'STRING';
                 else if (numLit) type = 'NUMBER';
-                else if (multiOp || singleOp) type = 'OP';
+                else if (multiOp) type = 'OP';
+                else if (singleOp) type = 'OP';
                 else if (ident) type = 'NAME';
                 else if (ws) type = 'WS';
 
@@ -760,7 +757,9 @@
 
             const getPrevNonWsToken = (idx) => {
                 for (let k = idx - 1; k >= 0; k--) {
-                    if (tokens[k].type !== 'WS' && tokens[k].type !== 'COMMENT') return tokens[k];
+                    if (tokens[k].type !== 'WS' && tokens[k].type !== 'COMMENT') {
+                        return tokens[k];
+                    }
                 }
                 return null;
             };
@@ -770,11 +769,6 @@
 
             for (let i = 0; i < tokens.length; i++) {
                 const tok = tokens[i];
-                
-                // Rule 1: Exclude 'print' from becoming a blank
-                if (tok.type === 'NAME' && tok.value === 'print') {
-                    continue;
-                }
 
                 if (tok.type === 'OP') {
                     if (tok.value === '[') {
@@ -783,52 +777,54 @@
                         bracketStack.push(isIndexing ? 'INDEX' : 'LIST_LITERAL');
                         continue;
                     }
-                    if (tok.value === ']') { bracketStack.pop(); continue; }
-                    if (!['(', ')', '[', ']', '{', '}', ','].includes(tok.value)) {
+                    if (tok.value === ']') {
+                        bracketStack.pop();
+                        continue;
+                    }
+                    if (['(', ')', '[', ']', '{', '}', ','].includes(tok.value)) {
+                        continue;
+                    }
+                    candidateIndices.push(i);
+                    continue;
+                }
+
+                if (tok.type === 'NAME') {
+                    // Exclude simple 'print' word from blanks
+                    if (tok.value !== 'print') {
                         candidateIndices.push(i);
                     }
                     continue;
                 }
-                if (tok.type === 'NAME') { candidateIndices.push(i); continue; }
+
                 if (tok.type === 'NUMBER') {
-                    if (bracketStack[bracketStack.length - 1] === 'INDEX') {
+                    const currentBracket = bracketStack[bracketStack.length - 1];
+                    if (currentBracket === 'INDEX') {
                         candidateIndices.push(i);
                     }
                 }
             }
 
-            // Shuffle candidate indices
+            // Shuffle candidates
             const shuffled = [...candidateIndices];
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(rng() * (i + 1));
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
 
-            // Rule 2: Enforce NO DUPLICATE BLANKS in a single question
+            // Pick blank indices ensuring NO DUPLICATE TOKEN VALUES in the same question
             const selectedIndices = [];
             const usedValues = new Set();
 
             for (const idx of shuffled) {
-                if (selectedIndices.length >= blankCount) break;
-                const tokVal = tokens[idx].value;
-                if (!usedValues.has(tokVal)) {
-                    usedValues.add(tokVal);
+                const val = tokens[idx].value;
+                if (!usedValues.has(val)) {
+                    usedValues.add(val);
                     selectedIndices.push(idx);
-                }
-            }
-
-            // Fallback if not enough unique tokens found
-            if (selectedIndices.length < blankCount) {
-                for (const idx of shuffled) {
                     if (selectedIndices.length >= blankCount) break;
-                    if (!selectedIndices.includes(idx)) {
-                        selectedIndices.push(idx);
-                    }
                 }
             }
 
             const selectedSet = new Set(selectedIndices);
-
             const answers = {};
             const segments = [];
             let blankNumber = 1;
@@ -847,30 +843,8 @@
             return { segments, answers };
         }
 
-        // Dynamic Logical Equivalence Evaluator
-        function isCorrectAnswer(expected, actual, contextProbId = '') {
-            const exp = expected.trim();
-            const act = actual.trim();
-
-            if (exp === act) return true;
-
-            const normQuote = (s) => {
-                if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-                    return `'${s.slice(1, -1)}'`;
-                }
-                return s;
-            };
-            if (normQuote(exp) === normQuote(act)) return true;
-
-            // Equivalent relational/logical operator acceptances
-            if (exp === '>=' && (act === '>=' || act === '==')) return true;
-            if (exp === '<=' && (act === '<=' || act === '==')) return true;
-
-            return false;
-        }
-
         function initApp() {
-            const savedProbs = localStorage.getItem('pyblank_problems_v8_orig');
+            const savedProbs = localStorage.getItem('pyblank_problems_v27');
             if (savedProbs) {
                 try { problems = JSON.parse(savedProbs); } catch (e) { problems = [...DEFAULT_PROBLEMS]; }
             } else {
@@ -878,49 +852,40 @@
                 saveProblems();
             }
 
-            const cachedSubs = localStorage.getItem('pyblank_cache_submissions_v8_orig');
-            if (cachedSubs) {
-                try { submissions = JSON.parse(cachedSubs); } catch (e) { submissions = []; }
+            const savedSubs = localStorage.getItem('pyblank_submissions_v27');
+            if (savedSubs) {
+                try { submissions = JSON.parse(savedSubs); } catch (e) { submissions = []; }
             }
 
-            const savedPwd = localStorage.getItem('pyblank_teacher_pwd');
-            if (savedPwd) teacherPassword = savedPwd;
+            const savedPwd = localStorage.getItem('pyblank_teacher_pwd_v27');
+            if (savedPwd) {
+                teacherPassword = savedPwd;
+            }
 
-            const savedSheetUrl = localStorage.getItem('pyblank_google_sheet_url');
-            if (savedSheetUrl) DEFAULT_GOOGLE_SHEET_URL = savedSheetUrl;
+            const savedSheetUrl = localStorage.getItem('pyblank_sheet_url_v27');
+            if (savedSheetUrl) {
+                DEFAULT_GOOGLE_SHEET_URL = savedSheetUrl;
+            }
 
+            renderTeacherDashboard();
             setupAntiCheatListeners();
         }
 
         function saveProblems() {
-            localStorage.setItem('pyblank_problems_v8_orig', JSON.stringify(problems));
-        }
-
-        function saveSubmissions() {
-            localStorage.setItem('pyblank_cache_submissions_v8_orig', JSON.stringify(submissions));
+            localStorage.setItem('pyblank_problems_v27', JSON.stringify(problems));
         }
 
         function resetToDefaultProblems() {
             problems = [...DEFAULT_PROBLEMS];
             saveProblems();
             renderTeacherDashboard();
-            showToast('선생님의 원본 21문항 문제 은행으로 복원되었습니다.');
+            showToast('기본 실습 문제로 복원되었습니다.');
         }
 
-        function configureGoogleSheetUrl() {
-            const currentUrl = localStorage.getItem('pyblank_google_sheet_url') || DEFAULT_GOOGLE_SHEET_URL;
-            const newUrl = prompt('구글 시트 Apps Script 웹앱 URL을 입력하세요:', currentUrl);
-            if (newUrl !== null) {
-                const trimmed = newUrl.trim();
-                if (trimmed) {
-                    localStorage.setItem('pyblank_google_sheet_url', trimmed);
-                    DEFAULT_GOOGLE_SHEET_URL = trimmed;
-                    showToast('구글 시트 연동 URL이 저장되었습니다.');
-                }
-            }
+        function saveSubmissions() {
+            localStorage.setItem('pyblank_submissions_v27', JSON.stringify(submissions));
         }
 
-        // Anti-Cheat System
         let lastLeaveTimestamp = 0;
         function setupAntiCheatListeners() {
             const triggerLeaveWarning = () => {
@@ -933,17 +898,24 @@
                 document.getElementById('leaveCountDisplay').textContent = currentExamSession.leaveCount;
                 document.getElementById('modalLeaveCount').textContent = `${currentExamSession.leaveCount}회`;
 
-                updateLocalSubmissionRecord('⚠️ 응시 중 (이탈 경고)');
-
                 const modal = document.getElementById('antiCheatModal');
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
             };
 
-            document.addEventListener('visibilitychange', () => { if (document.hidden) triggerLeaveWarning(); });
-            window.addEventListener('blur', () => triggerLeaveWarning());
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) triggerLeaveWarning();
+            });
+
+            window.addEventListener('blur', () => {
+                triggerLeaveWarning();
+            });
+
             window.addEventListener('beforeunload', (e) => {
-                if (currentExamSession.active) { e.preventDefault(); e.returnValue = ''; }
+                if (currentExamSession.active) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
             });
         }
 
@@ -953,7 +925,6 @@
             modal.classList.remove('flex');
         }
 
-        // Teacher Password & Auth Modals
         function requestTeacherAccess() {
             if (currentExamSession.active) {
                 showToast('시험 응시 중에는 교사 대시보드로 이동할 수 없습니다.');
@@ -965,8 +936,9 @@
             }
             const modal = document.getElementById('teacherPasswordModal');
             const input = document.getElementById('teacherPasswordInput');
+            const err = document.getElementById('teacherAuthError');
             input.value = '';
-            document.getElementById('teacherAuthError').classList.add('hidden');
+            err.classList.add('hidden');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             setTimeout(() => input.focus(), 50);
@@ -980,13 +952,15 @@
 
         function verifyTeacherPassword() {
             const input = document.getElementById('teacherPasswordInput');
+            const err = document.getElementById('teacherAuthError');
             if (input.value === teacherPassword) {
                 isTeacherAuthenticated = true;
                 closeTeacherPasswordModal();
                 switchView('teacherView');
                 showToast('교사 대시보드에 접속하였습니다.');
             } else {
-                document.getElementById('teacherAuthError').classList.remove('hidden');
+                err.classList.remove('hidden');
+                input.select();
             }
         }
 
@@ -998,9 +972,11 @@
 
         function openChangePasswordModal() {
             const modal = document.getElementById('changePasswordModal');
-            document.getElementById('newTeacherPasswordInput').value = '';
+            const input = document.getElementById('newTeacherPasswordInput');
+            input.value = '';
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            setTimeout(() => input.focus(), 50);
         }
 
         function closeChangePasswordModal() {
@@ -1011,11 +987,24 @@
 
         function saveNewTeacherPassword() {
             const newPwd = document.getElementById('newTeacherPasswordInput').value.trim();
-            if (!newPwd) { showToast('새 비밀번호를 입력하세요.'); return; }
+            if (!newPwd) {
+                showToast('새 비밀번호를 입력하세요.');
+                return;
+            }
             teacherPassword = newPwd;
-            localStorage.setItem('pyblank_teacher_pwd', teacherPassword);
+            localStorage.setItem('pyblank_teacher_pwd_v27', teacherPassword);
             closeChangePasswordModal();
-            showToast('교사 비밀번호가 변경되었습니다.');
+            showToast('비밀번호가 변경되었습니다.');
+        }
+
+        function configureGoogleSheetUrl() {
+            const current = DEFAULT_GOOGLE_SHEET_URL;
+            const newUrl = prompt('구글 앱스 스크립트 웹 앱 URL을 입력하세요:', current);
+            if (newUrl !== null) {
+                DEFAULT_GOOGLE_SHEET_URL = newUrl.trim();
+                localStorage.setItem('pyblank_sheet_url_v27', DEFAULT_GOOGLE_SHEET_URL);
+                showToast('구글 시트 연동 URL이 저장되었습니다.');
+            }
         }
 
         function switchView(viewId) {
@@ -1023,43 +1012,35 @@
                 showToast('시험 응시 중에는 이동할 수 없습니다.');
                 return;
             }
+
+            if (viewId !== 'teacherView') {
+                isTeacherAuthenticated = false;
+            }
+
             ['loginView', 'examView', 'resultView', 'teacherView'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             document.getElementById(viewId).classList.remove('hidden');
 
-            if (viewId === 'teacherView') renderTeacherDashboard();
-        }
-
-        function updateLocalSubmissionRecord(statusText, extraData = {}) {
-            const recordData = {
-                studentId: currentExamSession.studentId,
-                studentName: currentExamSession.studentName,
-                category: currentExamSession.category,
-                status: statusText,
-                leaveCount: currentExamSession.leaveCount,
-                startTime: currentExamSession.startTimeStr,
-                timestamp: Date.now(),
-                ...extraData
-            };
-
-            const idx = submissions.findIndex(s => s.studentId === currentExamSession.studentId && s.studentName === currentExamSession.studentName);
-            if (idx >= 0) {
-                submissions[idx] = { ...submissions[idx], ...recordData };
+            const btnStudent = document.getElementById('btnStudentMode');
+            const btnTeacher = document.getElementById('btnTeacherMode');
+            if (viewId === 'teacherView') {
+                btnTeacher.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-sky-600 text-white transition flex items-center gap-1.5 shadow-md';
+                btnStudent.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 transition';
+                renderTeacherDashboard();
             } else {
-                submissions.unshift(recordData);
+                btnStudent.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-sky-600 text-white transition shadow-md';
+                btnTeacher.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 transition flex items-center gap-1.5';
             }
-            saveSubmissions();
         }
 
-        // Student Exam Lifecycle
         function startExam() {
             const studentId = document.getElementById('studentIdInput').value.trim();
             const studentName = document.getElementById('studentNameInput').value.trim();
             const selectedCategory = document.getElementById('studentCategorySelect').value;
 
             if (!studentId || !studentName) {
-                showToast('학번과 이름을 모두 입력해주세요.');
+                showToast('학번과 이름을 모두 입력해 주세요.');
                 return;
             }
 
@@ -1067,7 +1048,7 @@
 
             let targetProblems = [];
             if (selectedCategory === 'RANDOM_6') {
-                const categories = [
+                const categoriesOrder = [
                     '1. 문자열·입출력',
                     '2. 리스트 활용',
                     '3. 연산자 활용',
@@ -1075,10 +1056,11 @@
                     '5. 반복문(for) 기초',
                     '6. 반복문(for) 응용'
                 ];
-                categories.forEach(cat => {
+                categoriesOrder.forEach(cat => {
                     const catProbs = problems.filter(p => p.category === cat);
                     if (catProbs.length > 0) {
-                        targetProblems.push(catProbs[Math.floor(rng() * catProbs.length)]);
+                        const randomIdx = Math.floor(rng() * catProbs.length);
+                        targetProblems.push(catProbs[randomIdx]);
                     }
                 });
             } else if (selectedCategory === 'ALL') {
@@ -1092,34 +1074,40 @@
                 return;
             }
 
-            const shuffled = [...targetProblems];
-            for (let i = shuffled.length - 1; i > 0; i--) {
+            const shuffledProblems = [...targetProblems];
+            for (let i = shuffledProblems.length - 1; i > 0; i--) {
                 const j = Math.floor(rng() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                [shuffledProblems[i], shuffledProblems[j]] = [shuffledProblems[j], shuffledProblems[i]];
             }
 
-            const generatedProblems = shuffled.map(p => {
-                const { segments, answers } = generatePythonBlanks(p.code, p.blankCount || 2, rng);
-                return { ...p, segments, answers };
+            const generatedProblems = shuffledProblems.map((prob) => {
+                const { segments, answers } = generatePythonBlanks(prob.code, prob.blankCount || 2, rng);
+                return {
+                    ...prob,
+                    segments,
+                    answers
+                };
             });
 
             const now = new Date();
-            const startTimeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             currentExamSession = {
                 active: true,
                 studentId,
                 studentName,
-                category: selectedCategory,
                 leaveCount: 0,
                 currentIndex: 0,
-                startTimeStamp: now.getTime(),
-                startTimeStr,
+                startTime: timeStr,
+                startTimeStamp: Date.now(),
+                category: selectedCategory,
                 generatedProblems,
                 userAnswers: {}
             };
 
-            generatedProblems.forEach((_, idx) => { currentExamSession.userAnswers[idx] = {}; });
+            generatedProblems.forEach((_, idx) => {
+                currentExamSession.userAnswers[idx] = {};
+            });
 
             document.getElementById('navModeButtons').classList.add('hidden');
             const examHeader = document.getElementById('examStatusHeader');
@@ -1127,8 +1115,6 @@
             examHeader.classList.add('flex');
             document.getElementById('headerStudentInfo').textContent = `${studentId} ${studentName}`;
             document.getElementById('leaveCountDisplay').textContent = '0';
-
-            updateLocalSubmissionRecord('🔵 응시 중');
 
             switchView('examView');
             renderCurrentProblem();
@@ -1149,12 +1135,13 @@
             document.getElementById('currentProblemDesc').textContent = prob.desc;
             document.getElementById('expectedOutputContainer').textContent = prob.expectedOutput;
 
-            document.getElementById('currentBlankCount').textContent = Object.keys(prob.answers).length;
+            const blankKeys = Object.keys(prob.answers);
+            document.getElementById('currentBlankCount').textContent = blankKeys.length;
 
             const codeContainer = document.getElementById('codeContainer');
             codeContainer.innerHTML = '';
 
-            prob.segments.forEach(seg => {
+            prob.segments.forEach((seg) => {
                 if (!seg.isBlank) {
                     const span = document.createElement('span');
                     span.textContent = seg.text;
@@ -1163,18 +1150,24 @@
                     const input = document.createElement('input');
                     input.type = 'text';
                     input.autocomplete = 'off';
+                    input.spellcheck = false;
                     input.dataset.key = seg.key;
                     const currentVal = savedAns[seg.key] || '';
                     input.value = currentVal;
-                    input.style.width = `${Math.max(6, Math.min(16, seg.answer.length + 3))}ch`;
+
+                    const charWidth = Math.max(6, Math.min(16, seg.answer.length + 3));
+                    input.style.width = `${charWidth}ch`;
                     input.placeholder = seg.key.replace('blank_', '#');
                     input.className = `blank-input ${currentVal.trim() ? 'filled' : ''}`;
 
                     input.addEventListener('input', (e) => {
                         const val = e.target.value;
                         currentExamSession.userAnswers[idx][seg.key] = val;
-                        if (val.trim()) e.target.classList.add('filled');
-                        else e.target.classList.remove('filled');
+                        if (val.trim().length > 0) {
+                            e.target.classList.add('filled');
+                        } else {
+                            e.target.classList.remove('filled');
+                        }
                         updateAnsweredStatus();
                     });
 
@@ -1206,12 +1199,12 @@
             let filledCount = 0;
 
             Object.keys(prob.answers).forEach(k => {
-                if ((ansMap[k] || '').trim()) filledCount++;
+                if ((ansMap[k] || '').trim().length > 0) filledCount++;
             });
 
             const statusEl = document.getElementById('answeredStatusText');
             if (filledCount === totalBlanks) {
-                statusEl.textContent = `빈칸 작성 완료 (${filledCount}/${totalBlanks})`;
+                statusEl.textContent = `현재 문제 입력 완료 (${filledCount}/${totalBlanks})`;
                 statusEl.className = 'text-emerald-400 font-semibold';
             } else {
                 statusEl.textContent = `작성 중 (${filledCount}/${totalBlanks} 입력됨)`;
@@ -1230,22 +1223,25 @@
                 const allFilled = keys.every(k => (ansMap[k] || '').trim().length > 0);
 
                 const btn = document.createElement('button');
-                btn.onclick = () => { currentExamSession.currentIndex = i; renderCurrentProblem(); };
+                btn.onclick = () => {
+                    currentExamSession.currentIndex = i;
+                    renderCurrentProblem();
+                };
 
                 if (i === currentExamSession.currentIndex) {
-                    btn.className = 'w-8 h-8 rounded-lg font-bold text-xs bg-sky-500 text-white shadow-md shadow-sky-500/30';
+                    btn.className = 'w-8 h-8 rounded-lg font-bold text-xs bg-sky-500 text-white shadow-md transition';
                 } else if (allFilled) {
-                    btn.className = 'w-8 h-8 rounded-lg font-semibold text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+                    btn.className = 'w-8 h-8 rounded-lg font-semibold text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition';
                 } else {
-                    btn.className = 'w-8 h-8 rounded-lg font-medium text-xs bg-slate-800 text-slate-400';
+                    btn.className = 'w-8 h-8 rounded-lg font-medium text-xs bg-slate-800 text-slate-400 hover:bg-slate-700 transition';
                 }
                 btn.textContent = i + 1;
                 dotsContainer.appendChild(btn);
             });
         }
 
-        function navigateProblem(dir) {
-            const nextIdx = currentExamSession.currentIndex + dir;
+        function navigateProblem(direction) {
+            const nextIdx = currentExamSession.currentIndex + direction;
             if (nextIdx >= 0 && nextIdx < currentExamSession.generatedProblems.length) {
                 currentExamSession.currentIndex = nextIdx;
                 renderCurrentProblem();
@@ -1253,21 +1249,23 @@
         }
 
         function openSubmitModal() {
-            let totalBlanks = 0, filledBlanks = 0;
+            let totalBlanks = 0;
+            let filledBlanks = 0;
+
             currentExamSession.generatedProblems.forEach((prob, idx) => {
                 const ansMap = currentExamSession.userAnswers[idx] || {};
                 Object.keys(prob.answers).forEach(k => {
                     totalBlanks++;
-                    if ((ansMap[k] || '').trim()) filledBlanks++;
+                    if ((ansMap[k] || '').trim().length > 0) filledBlanks++;
                 });
             });
 
             const unfilled = totalBlanks - filledBlanks;
             const msgEl = document.getElementById('submitModalMessage');
             if (unfilled > 0) {
-                msgEl.innerHTML = `채우지 않은 빈칸이 <strong class="text-amber-400">${unfilled}개</strong> 있습니다.<br>제출하시겠습니까?`;
+                msgEl.innerHTML = `아직 채우지 않은 빈칸이 <strong class="text-amber-400">${unfilled}개</strong> 있습니다.<br>그대로 제출하시겠습니까?`;
             } else {
-                msgEl.innerHTML = `모든 빈칸(${totalBlanks}개)을 작성하셨습니다.<br>제출하시겠습니까?`;
+                msgEl.innerHTML = `모든 빈칸(${totalBlanks}개)을 작성하셨습니다.<br>제출 후에는 수정할 수 없습니다. 제출할까요?`;
             }
 
             const modal = document.getElementById('submitConfirmModal');
@@ -1281,17 +1279,38 @@
             modal.classList.remove('flex');
         }
 
-        async function gradeAndSubmitExam() {
-            closeSubmitModal();
+        // Equivalent logical operator validation
+        function isCorrectAnswer(expected, actual) {
+            const exp = expected.trim();
+            const act = actual.trim();
 
-            const endTime = new Date();
-            const submittedAt = endTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            
-            const diffMs = endTime.getTime() - currentExamSession.startTimeStamp;
-            const totalSec = Math.floor(diffMs / 1000);
-            const durationMin = Math.floor(totalSec / 60);
-            const durationSec = totalSec % 60;
-            const durationStr = `${durationMin}분 ${durationSec}초`;
+            if (exp === act) return true;
+
+            // Quote equivalency ('apple' vs "apple")
+            const normalizeQuote = (s) => {
+                if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+                    return `'${s.slice(1, -1)}'`;
+                }
+                return s;
+            };
+            if (normalizeQuote(exp) === normalizeQuote(act)) return true;
+
+            // Equivalent operators for specific conditions
+            const falseOperators = ['==', '>', '>='];
+            if (falseOperators.includes(exp) && falseOperators.includes(act)) {
+                return true;
+            }
+
+            const trueOperators = ['!=', '<', '<='];
+            if (trueOperators.includes(exp) && trueOperators.includes(act)) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function gradeAndSubmitExam() {
+            closeSubmitModal();
 
             let totalBlanks = 0;
             let correctBlanks = 0;
@@ -1303,60 +1322,67 @@
 
                 Object.keys(prob.answers).forEach(key => {
                     totalBlanks++;
-                    const expected = prob.answers[key].trim();
-                    const actual = (studentAnsMap[key] || '').trim();
+                    const expected = prob.answers[key];
+                    const actual = studentAnsMap[key] || '';
 
-                    const isCorrect = isCorrectAnswer(expected, actual, prob.id);
+                    const isCorrect = isCorrectAnswer(expected, actual);
                     if (isCorrect) correctBlanks++;
 
-                    blankResults.push({ key, expected, actual: actual || '(미입력)', isCorrect });
+                    blankResults.push({
+                        key,
+                        expected,
+                        actual: actual || '(미입력)',
+                        isCorrect
+                    });
                 });
 
-                problemReviews.push({ title: prob.title, blankResults });
+                problemReviews.push({
+                    title: prob.title,
+                    blankResults
+                });
             });
 
             const score = totalBlanks > 0 ? Math.round((correctBlanks / totalBlanks) * 100) : 0;
+            const endTimeStamp = Date.now();
+            const durationMs = endTimeStamp - currentExamSession.startTimeStamp;
+            const durationMin = Math.floor(durationMs / 60000);
+            const durationSec = Math.floor((durationMs % 60000) / 1000);
+            const durationStr = `${durationMin}분 ${durationSec}초`;
+
+            const now = new Date();
+            const submitTimeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             const record = {
                 studentId: currentExamSession.studentId,
                 studentName: currentExamSession.studentName,
-                category: currentExamSession.category,
-                status: '🟢 제출 완료',
                 score,
                 correctBlanks,
                 totalBlanks,
                 leaveCount: currentExamSession.leaveCount,
-                startTime: currentExamSession.startTimeStr,
-                submittedAt,
+                startTime: currentExamSession.startTime,
+                submittedAt: submitTimeStr,
                 duration: durationStr,
+                category: currentExamSession.category,
+                status: '🟢 제출 완료',
                 problemReviews
             };
 
-            updateLocalSubmissionRecord('🟢 제출 완료', record);
+            submissions.unshift(record);
+            saveSubmissions();
 
-            // Google Sheets Sync Webhook
-            if (DEFAULT_GOOGLE_SHEET_URL) {
-                try {
-                    fetch(DEFAULT_GOOGLE_SHEET_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(record)
-                    }).catch(err => console.error("Google sheet sync error:", err));
-                } catch (e) {
-                    console.error("Google Sheet webhook failed:", e);
-                }
-            }
+            // Send payload to Google Sheets Web App
+            sendToGoogleSheet(record);
 
             currentExamSession.active = false;
             document.getElementById('examStatusHeader').classList.add('hidden');
+            document.getElementById('examStatusHeader').classList.remove('flex');
             document.getElementById('navModeButtons').classList.remove('hidden');
 
-            document.getElementById('resultTitle').textContent = `${currentExamSession.studentName}(${currentExamSession.studentId}) 학생 채점 결과`;
-            document.getElementById('resultScore').textContent = `${score}점`;
-            document.getElementById('resultCorrectCount').textContent = `${correctBlanks} / ${totalBlanks}`;
-            document.getElementById('resultDuration').textContent = durationStr;
-            document.getElementById('resultLeaveCount').textContent = `${currentExamSession.leaveCount}회`;
+            document.getElementById('resultTitle').textContent = `${record.studentName}(${record.studentId}) 제출 결과`;
+            document.getElementById('resultScore').textContent = `${record.score}점`;
+            document.getElementById('resultCorrectCount').textContent = `${record.correctBlanks} / ${record.totalBlanks}`;
+            document.getElementById('resultDuration').textContent = record.duration;
+            document.getElementById('resultLeaveCount').textContent = `${record.leaveCount}회`;
 
             const reviewList = document.getElementById('studentReviewList');
             reviewList.innerHTML = '';
@@ -1367,11 +1393,11 @@
 
                 const badgesHtml = rev.blankResults.map((b, bIdx) => {
                     if (b.isCorrect) {
-                        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs code-font">
+                        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs code-font">
                             #${bIdx + 1} 정답: <strong>${escapeHtml(b.expected)}</strong> ✓
                         </span>`;
                     } else {
-                        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs code-font">
+                        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs code-font">
                             #${bIdx + 1} 내 답: <del>${escapeHtml(b.actual)}</del> → 정답: <strong class="text-emerald-400">${escapeHtml(b.expected)}</strong>
                         </span>`;
                     }
@@ -1387,51 +1413,75 @@
             switchView('resultView');
         }
 
+        function sendToGoogleSheet(recordData) {
+            if (!DEFAULT_GOOGLE_SHEET_URL) return;
+
+            fetch(DEFAULT_GOOGLE_SHEET_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(recordData)
+            }).then(() => {
+                showToast('구글 시트에 답안이 업로드되었습니다.');
+            }).catch(err => {
+                console.error('Sheet upload error:', err);
+            });
+        }
+
         function renderTeacherDashboard() {
-            document.getElementById('submissionTotalBadge').textContent = `${submissions.length}명 참여`;
+            document.getElementById('submissionTotalBadge').textContent = `${submissions.length}명 제출`;
             const tbody = document.getElementById('submissionsTableBody');
             tbody.innerHTML = '';
 
             if (submissions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">실시간 참여 학생 데이터를 기다리고 있습니다...</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">실시간 참여 데이터를 기다리고 있습니다.</td></tr>`;
             } else {
                 submissions.forEach(sub => {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-slate-800/40 transition';
-                    const leaveBadge = sub.leaveCount > 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-400';
-                    const statusBadgeClass = sub.status && sub.status.includes('제출') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-sky-500/20 text-sky-400';
 
                     tr.innerHTML = `
-                        <td class="py-3 px-4 font-mono text-xs">${escapeHtml(sub.studentId || '-')}</td>
-                        <td class="py-3 px-4 font-semibold text-white">${escapeHtml(sub.studentName || '-')}</td>
-                        <td class="py-3 px-4"><span class="px-2.5 py-1 rounded text-xs font-semibold ${statusBadgeClass}">${escapeHtml(sub.status || '🔵 응시 중')}</span></td>
-                        <td class="py-3 px-4 font-bold text-sky-400">${sub.score !== undefined ? sub.score + '점' : '-'}</td>
-                        <td class="py-3 px-4 text-emerald-400">${sub.correctBlanks !== undefined ? `${sub.correctBlanks}/${sub.totalBlanks}` : '-'}</td>
-                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs ${leaveBadge}">${sub.leaveCount || 0}회</span></td>
-                        <td class="py-3 px-4 text-xs text-slate-400">${escapeHtml(sub.startTime || '-')}</td>
-                        <td class="py-3 px-4 text-xs text-slate-400">${escapeHtml(sub.submittedAt || '-')}</td>
-                        <td class="py-3 px-4 text-xs text-amber-300 font-medium">${escapeHtml(sub.duration || '-')}</td>
+                        <td class="py-3 px-4 font-mono text-xs sm:text-sm">${escapeHtml(sub.studentId)}</td>
+                        <td class="py-3 px-4 font-semibold text-white">${escapeHtml(sub.studentName)}</td>
+                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs bg-emerald-500/20 text-emerald-400">${escapeHtml(sub.status || '제출완료')}</span></td>
+                        <td class="py-3 px-4 font-bold text-sky-400">${sub.score}점</td>
+                        <td class="py-3 px-4 text-emerald-400">${sub.correctBlanks} / ${sub.totalBlanks}</td>
+                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs bg-slate-800 text-slate-300">${sub.leaveCount}회</span></td>
+                        <td class="py-3 px-4 text-xs text-slate-400">${escapeHtml(sub.startTime)}</td>
+                        <td class="py-3 px-4 text-xs text-slate-400">${escapeHtml(sub.submittedAt)}</td>
+                        <td class="py-3 px-4 text-xs font-semibold text-amber-400">${escapeHtml(sub.duration)}</td>
                     `;
                     tbody.appendChild(tr);
                 });
             }
 
             const filterCat = document.getElementById('teacherCategoryFilter')?.value || 'ALL';
-            const filteredProbs = filterCat === 'ALL' ? problems : problems.filter(p => p.category === filterCat);
+            const filteredProbs = filterCat === 'ALL'
+                ? problems
+                : problems.filter(p => p.category === filterCat);
+
             const probList = document.getElementById('teacherProblemList');
             probList.innerHTML = '';
 
             filteredProbs.forEach((p) => {
                 const item = document.createElement('div');
-                item.className = 'bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col gap-2';
+                item.className = 'bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between gap-3';
                 item.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-semibold">${escapeHtml(p.category || '일반')}</span>
-                        <button onclick="deleteProblem('${p.id}')" class="text-xs text-rose-400 hover:text-rose-300">삭제</button>
+                    <div>
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold">${escapeHtml(p.category || '일반')}</span>
+                                <span class="font-bold text-sm text-white">${escapeHtml(p.title)}</span>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="text-xs px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">빈칸 ${p.blankCount}개</span>
+                                <button onclick="deleteProblem('${p.id}')" class="text-xs text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded bg-rose-500/10">삭제</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1.5">${escapeHtml(p.desc)}</p>
+                        <pre class="mt-2 p-2.5 rounded-lg bg-slate-900 text-xs code-font text-slate-300 overflow-x-auto">${escapeHtml(p.code)}</pre>
+                        <div class="mt-1.5 text-[11px] text-emerald-400 code-font">출력 예시: ${escapeHtml(p.expectedOutput)}</div>
                     </div>
-                    <div class="font-bold text-sm text-white">${escapeHtml(p.title)}</div>
-                    <p class="text-xs text-slate-400">${escapeHtml(p.desc)}</p>
-                    <pre class="p-2 rounded bg-slate-900 text-xs code-font text-slate-300 overflow-x-auto">${escapeHtml(p.code)}</pre>
                 `;
                 probList.appendChild(item);
             });
@@ -1440,19 +1490,27 @@
         function previewRandomBlanks() {
             const code = document.getElementById('newProbCode').value.trim();
             const blankCount = parseInt(document.getElementById('newProbBlanks').value, 10) || 2;
-            if (!code) { showToast('파이썬 코드를 먼저 입력하세요.'); return; }
+
+            if (!code) {
+                showToast('파이썬 코드를 입력하세요.');
+                return;
+            }
 
             const { segments, answers } = generatePythonBlanks(code, blankCount);
             const previewBox = document.getElementById('previewBox');
-            previewBox.classList.remove('hidden');
+            const previewCodeArea = document.getElementById('previewCodeArea');
+            const previewAnswerArea = document.getElementById('previewAnswerArea');
 
-            document.getElementById('previewCodeArea').innerHTML = segments.map(s => {
-                if (s.isBlank) return `<span class="px-1.5 py-0.5 bg-sky-500/20 text-sky-300 font-bold">[${s.key}]</span>`;
+            previewBox.classList.remove('hidden');
+            previewCodeArea.innerHTML = segments.map(s => {
+                if (s.isBlank) {
+                    return `<span class="px-2 py-0.5 mx-0.5 rounded bg-sky-500/20 border border-sky-400 text-sky-300 font-bold">[${s.key}]</span>`;
+                }
                 return escapeHtml(s.text);
             }).join('');
 
-            const ansText = Object.entries(answers).map(([k, v]) => `${k}: ${v}`).join(' | ');
-            document.getElementById('previewAnswerArea').textContent = `정답 추출: ${ansText}`;
+            const ansText = Object.entries(answers).map(([k, v]) => `${k}: ${v}`).join('  |  ');
+            previewAnswerArea.textContent = `추출 정답 → ${ansText}`;
         }
 
         function addNewProblem() {
@@ -1464,11 +1522,20 @@
             const blankCount = parseInt(document.getElementById('newProbBlanks').value, 10) || 2;
 
             if (!title || !code || !expectedOutput) {
-                showToast('필수 항목을 모두 입력해주세요.');
+                showToast('제목, 코드, 출력 예시를 모두 입력하세요.');
                 return;
             }
 
-            problems.push({ id: 'prob_' + Date.now(), category, title, desc: desc || '코드의 빈칸을 채우세요.', code, expectedOutput, blankCount });
+            problems.push({
+                id: 'prob_' + Date.now(),
+                category,
+                title,
+                desc: desc || '주어진 출력 결과가 나오도록 알맞은 코드를 완성하세요.',
+                code,
+                expectedOutput,
+                blankCount
+            });
+
             saveProblems();
             renderTeacherDashboard();
 
@@ -1477,10 +1544,14 @@
             document.getElementById('newProbCode').value = '';
             document.getElementById('newProbOutput').value = '';
             document.getElementById('previewBox').classList.add('hidden');
-            showToast('새 문제가 추가되었습니다!');
+            showToast('새 문제가 등록되었습니다.');
         }
 
         function deleteProblem(probId) {
+            if (problems.length <= 1) {
+                showToast('최소 1개 이상의 문제가 남아있어야 합니다.');
+                return;
+            }
             problems = problems.filter(p => p.id !== probId);
             saveProblems();
             renderTeacherDashboard();
@@ -1491,53 +1562,66 @@
             submissions = [];
             saveSubmissions();
             renderTeacherDashboard();
-            showToast('제출 기록이 초기화되었습니다.');
+            showToast('수합 기록이 초기화되었습니다.');
         }
 
         function exportResultsCSV() {
-            if (submissions.length === 0) { showToast('다운로드할 수합 데이터가 없습니다.'); return; }
+            if (submissions.length === 0) {
+                showToast('내보낼 학생 수합 기록이 없습니다.');
+                return;
+            }
 
-            const headers = ['학번', '이름', '응시상태', '최종점수', '맞힌빈칸수', '전체빈칸수', '이탈횟수', '시작시간', '종료시간', '소요시간', '응시영역', '문1-1', '문1-2', '문2-1', '문2-2', '문3-1', '문3-2', '문4-1', '문4-2', '문5-1', '문5-2', '문6-1', '문6-2'];
-            
+            const headers = ['학번', '이름', '최종점수', '맞힌빈칸수', '전체빈칸수', '이탈횟수', '시작시간', '종료시간', '소요시간', '응시영역', '문1-1', '문1-2', '문2-1', '문2-2', '문3-1', '문3-2', '문4-1', '문4-2', '문5-1', '문5-2', '문6-1', '문6-2'];
+
             const rows = submissions.map(s => {
-                const base = [
-                    `"${s.studentId || ''}"`,
-                    `"${s.studentName || ''}"`,
-                    `"${s.status || ''}"`,
-                    s.score !== undefined ? `${s.score}점` : '',
-                    s.correctBlanks !== undefined ? s.correctBlanks : '',
-                    s.totalBlanks !== undefined ? s.totalBlanks : '',
-                    `${s.leaveCount || 0}회`,
-                    `"${s.startTime || ''}"`,
-                    `"${s.submittedAt || ''}"`,
-                    `"${s.duration || ''}"`,
-                    `"${s.category || ''}"`
-                ];
-
-                const blankAns = [];
+                const answerList = [];
                 if (s.problemReviews) {
                     s.problemReviews.forEach(rev => {
-                        rev.blankResults.forEach(b => {
-                            blankAns.push(`"${b.actual} (${b.isCorrect ? 'O' : 'X'})"`);
-                        });
+                        if (rev.blankResults) {
+                            rev.blankResults.forEach(b => {
+                                const val = b.actual !== undefined ? String(b.actual) : '(미입력)';
+                                const textVal = (val.startsWith('=') || val.startsWith('+') || val.startsWith('-')) ? `'${val}` : val;
+                                answerList.push(`"${textVal} (${b.isCorrect ? 'O' : 'X'})"`);
+                            });
+                        }
                     });
                 }
-                return [...base, ...blankAns];
+
+                const baseInfo = [
+                    `"${s.studentId}"`,
+                    `"${s.studentName}"`,
+                    `"${s.score}점"`,
+                    s.correctBlanks,
+                    s.totalBlanks,
+                    s.leaveCount,
+                    `"${s.startTime}"`,
+                    `"${s.submittedAt}"`,
+                    `"${s.duration}"`,
+                    `"${s.category}"`
+                ];
+
+                return baseInfo.concat(answerList);
             });
 
             const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
+
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `파이썬_평가수합_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.setAttribute('download', `PyBlank_평가수합결과_${new Date().toISOString().slice(0, 10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
         function escapeHtml(str) {
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         let toastTimer = null;
@@ -1546,11 +1630,11 @@
             toast.textContent = msg;
             toast.classList.remove('hidden');
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
+            toastTimer = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
         }
 
-        window.renderTeacherDashboard = renderTeacherDashboard;
-        window.showToast = showToast;
         window.onload = initApp;
     </script>
 </body>

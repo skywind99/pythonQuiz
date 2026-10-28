@@ -143,6 +143,9 @@
                 </div>
                 <div class="flex items-center gap-4">
                     <div class="text-xs text-slate-400">
+                        문제: <span id="examProgressBadge" class="font-bold text-sky-400">1 / 6</span>
+                    </div>
+                    <div class="text-xs text-slate-400">
                         경과시간: <span id="examTimer" class="font-mono text-white font-bold">00:00</span>
                     </div>
                     <div id="leaveCounter" class="text-xs px-2.5 py-1 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">
@@ -151,16 +154,22 @@
                 </div>
             </div>
 
-            <!-- Problem Cards List -->
-            <div id="problemContainer" class="space-y-6 flex-1 overflow-y-auto pr-1"></div>
+            <!-- Single Problem View Container -->
+            <div id="problemContainer" class="flex-1 overflow-y-auto pr-1"></div>
 
-            <!-- Submit Action Bar -->
+            <!-- Navigation and Submit Bar -->
             <div class="mt-6 p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between sticky bottom-4 z-30 shadow-2xl">
-                <div class="text-xs text-slate-400">
-                    모든 빈칸을 채운 후 최종 제출 버튼을 클릭해 주세요.
-                </div>
-                <button onclick="confirmSubmitExam()" class="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all text-sm">
-                    ✅ 최종 제출 및 채점
+                <button id="btnPrevProblem" onclick="navigateProblem(-1)" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center gap-1">
+                    ◀ 이전 문제
+                </button>
+
+                <div id="examQuestionNumbers" class="flex items-center gap-1.5 overflow-x-auto px-2"></div>
+
+                <button id="btnNextProblem" onclick="navigateProblem(1)" class="px-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1">
+                    다음 문제 ▶
+                </button>
+                <button id="btnSubmitExam" onclick="confirmSubmitExam()" class="hidden px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all text-xs">
+                    ✅ 최종 제출
                 </button>
             </div>
         </section>
@@ -395,10 +404,11 @@
             leaveCount: 0,
             timerInterval: null,
             generatedProblems: [],
-            userAnswers: {} // { problemIndex: { blankKey: "user text" } }
+            userAnswers: {}, // { problemIndex: { blankKey: "user text" } }
+            currentProblemIndex: 0
         };
 
-        // Original 21 Problems Dataset (Excluding 'while' loops, 5 Core Domains)
+        // Original 21 Problems Dataset (5 Core Domains, 6 Category Groups)
         const DEFAULT_PROBLEMS = [
             // [영역 1] 문자열·입출력
             {
@@ -704,7 +714,8 @@
                 leaveCount: 0,
                 timerInterval: null,
                 generatedProblems: problemsToRun,
-                userAnswers: {}
+                userAnswers: {},
+                currentProblemIndex: 0
             };
 
             // Setup UI
@@ -712,7 +723,7 @@
             document.getElementById('examCategoryBadge').textContent = currentExamSession.category;
             document.getElementById('leaveCounter').textContent = `이탈: 0회`;
 
-            renderExamProblems();
+            renderCurrentProblem();
             startTimer();
 
             document.getElementById('examStatusHeader').classList.remove('hidden');
@@ -722,65 +733,121 @@
             showToast("🚀 시험이 시작되었습니다! 화이팅!");
         }
 
-        // Render Problems in Exam View
-        function renderExamProblems() {
+        // Render Current Single Problem Page
+        function renderCurrentProblem() {
             const container = document.getElementById('problemContainer');
             container.innerHTML = '';
 
-            currentExamSession.generatedProblems.forEach((prob, idx) => {
-                const card = document.createElement('div');
-                card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4";
+            const idx = currentExamSession.currentProblemIndex;
+            const prob = currentExamSession.generatedProblems[idx];
+            const total = currentExamSession.generatedProblems.length;
 
-                // Format Python Code with interactive Inputs
-                let formattedCode = escapeHtml(prob.code);
+            // Update Progress Indicators
+            document.getElementById('examProgressBadge').textContent = `${idx + 1} / ${total}`;
+
+            // Buttons state
+            const btnPrev = document.getElementById('btnPrevProblem');
+            const btnNext = document.getElementById('btnNextProblem');
+            const btnSubmit = document.getElementById('btnSubmitExam');
+
+            btnPrev.disabled = (idx === 0);
+            btnPrev.style.opacity = (idx === 0) ? '0.4' : '1';
+
+            if (idx === total - 1) {
+                btnNext.classList.add('hidden');
+                btnSubmit.classList.remove('hidden');
+            } else {
+                btnNext.classList.remove('hidden');
+                btnSubmit.classList.add('hidden');
+            }
+
+            // Render Number Pagination Dots
+            const paginationContainer = document.getElementById('examQuestionNumbers');
+            paginationContainer.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const btn = document.createElement('button');
+                const isCurrent = (i === idx);
+                const hasAnswers = currentExamSession.userAnswers[i] && Object.values(currentExamSession.userAnswers[i]).some(v => v.length > 0);
                 
-                Object.keys(prob.answers).forEach((blankKey, bIdx) => {
-                    const placeholder = `___${blankKey}___`;
-                    const inputHtml = `<input type="text" 
-                        data-problem="${idx}" 
-                        data-blank="${blankKey}"
-                        oninput="handleInputChange(${idx}, '${blankKey}', this.value)"
-                        placeholder="빈칸 ${bIdx + 1}" 
-                        class="mx-1 px-3 py-1 bg-slate-950 border border-sky-500/40 rounded-lg text-sky-300 font-mono text-sm focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 w-36 inline-block code-font">`;
-                    
-                    formattedCode = formattedCode.replace(placeholder, inputHtml);
-                });
+                btn.className = `w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                    isCurrent 
+                        ? 'bg-sky-500 text-white ring-2 ring-sky-400/50 scale-105' 
+                        : hasAnswers 
+                            ? 'bg-slate-800 text-sky-400 border border-sky-500/30' 
+                            : 'bg-slate-950 text-slate-500 border border-slate-800'
+                }`;
+                btn.textContent = i + 1;
+                btn.onclick = () => {
+                    currentExamSession.currentProblemIndex = i;
+                    renderCurrentProblem();
+                };
+                paginationContainer.appendChild(btn);
+            }
 
-                card.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 text-xs font-bold flex items-center justify-center">
-                                ${idx + 1}
-                            </span>
-                            <h3 class="font-bold text-white text-base sm:text-lg">${escapeHtml(prob.title)}</h3>
-                        </div>
-                        <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 font-medium">
-                            ${escapeHtml(prob.category)}
-                        </span>
-                    </div>
+            const card = document.createElement('div');
+            card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4";
 
-                    <p class="text-xs sm:text-sm text-slate-300">${escapeHtml(prob.desc)}</p>
+            // Format Python Code with interactive Inputs and preserved values
+            let formattedCode = escapeHtml(prob.code);
+            const currentAnswers = currentExamSession.userAnswers[idx] || {};
 
-                    <!-- Code Block -->
-                    <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 overflow-x-auto">
-                        <div class="text-[10px] text-slate-400 font-mono mb-2 select-none flex items-center justify-between border-b border-slate-900 pb-1">
-                            <span>PYTHON CODE</span>
-                            <span>UTF-8</span>
-                        </div>
-                        <pre class="text-slate-100 code-font text-sm leading-relaxed whitespace-pre">${formattedCode}</pre>
-                    </div>
-
-                    <!-- Stdout Sample -->
-                    ${prob.stdout ? `
-                    <div class="bg-slate-950/60 border border-slate-800/50 rounded-xl p-3 text-xs">
-                        <span class="text-[10px] text-emerald-400 font-mono block mb-1">▶ 실행 출력 예시 (STDOUT)</span>
-                        <pre class="text-slate-300 font-mono text-xs whitespace-pre-wrap">${escapeHtml(prob.stdout)}</pre>
-                    </div>
-                    ` : ''}
-                `;
-
-                container.appendChild(card);
+            Object.keys(prob.answers).forEach((blankKey, bIdx) => {
+                const placeholder = `___${blankKey}___`;
+                const savedVal = currentAnswers[blankKey] || '';
+                const inputHtml = `<input type="text" 
+                    data-problem="${idx}" 
+                    data-blank="${blankKey}"
+                    value="${escapeHtml(savedVal)}"
+                    oninput="handleInputChange(${idx}, '${blankKey}', this.value)"
+                    placeholder="빈칸 ${bIdx + 1}" 
+                    class="mx-1 px-3 py-1 bg-slate-950 border border-sky-500/40 rounded-lg text-sky-300 font-mono text-sm focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 w-36 inline-block code-font">`;
+                
+                formattedCode = formattedCode.replace(placeholder, inputHtml);
             });
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 text-xs font-bold flex items-center justify-center">
+                            Q${idx + 1}
+                        </span>
+                        <h3 class="font-bold text-white text-base sm:text-lg">${escapeHtml(prob.title)}</h3>
+                    </div>
+                    <span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 font-medium">
+                        ${escapeHtml(prob.category)}
+                    </span>
+                </div>
+
+                <p class="text-xs sm:text-sm text-slate-300">${escapeHtml(prob.desc)}</p>
+
+                <!-- Code Block -->
+                <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 overflow-x-auto">
+                    <div class="text-[10px] text-slate-400 font-mono mb-2 select-none flex items-center justify-between border-b border-slate-900 pb-1">
+                        <span>PYTHON CODE</span>
+                        <span>UTF-8</span>
+                    </div>
+                    <pre class="text-slate-100 code-font text-sm leading-relaxed whitespace-pre">${formattedCode}</pre>
+                </div>
+
+                <!-- Stdout Sample -->
+                ${prob.stdout ? `
+                <div class="bg-slate-950/60 border border-slate-800/50 rounded-xl p-3 text-xs">
+                    <span class="text-[10px] text-emerald-400 font-mono block mb-1">▶ 실행 출력 예시 (STDOUT)</span>
+                    <pre class="text-slate-300 font-mono text-xs whitespace-pre-wrap">${escapeHtml(prob.stdout)}</pre>
+                </div>
+                ` : ''}
+            `;
+
+            container.appendChild(card);
+        }
+
+        // Navigate between single problem pages
+        function navigateProblem(direction) {
+            const newIndex = currentExamSession.currentProblemIndex + direction;
+            if (newIndex >= 0 && newIndex < currentExamSession.generatedProblems.length) {
+                currentExamSession.currentProblemIndex = newIndex;
+                renderCurrentProblem();
+            }
         }
 
         // Live input tracker
@@ -789,36 +856,42 @@
                 currentExamSession.userAnswers[probIdx] = {};
             }
             currentExamSession.userAnswers[probIdx][blankKey] = value.trim();
+
+            // Update status indicator dots
+            const total = currentExamSession.generatedProblems.length;
+            const paginationContainer = document.getElementById('examQuestionNumbers');
+            if (paginationContainer && paginationContainer.children[probIdx]) {
+                const btn = paginationContainer.children[probIdx];
+                const hasAnswers = Object.values(currentExamSession.userAnswers[probIdx]).some(v => v.length > 0);
+                if (probIdx !== currentExamSession.currentProblemIndex) {
+                    btn.className = `w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                        hasAnswers 
+                            ? 'bg-slate-800 text-sky-400 border border-sky-500/30' 
+                            : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    }`;
+                }
+            }
         }
 
-        // Exact & Logical Operator Evaluator
-        function isCorrectAnswer(expected, actual) {
+        // Exact & Logical Operator Evaluator with Whitespace Tolerance
+        function isCorrectAnswer(actual, expected) {
             if (!actual) return false;
             
-            const cleanExp = expected.trim();
-            const cleanAct = actual.trim();
+            // Normalize spaces: remove all spaces for code snippet comparison
+            const normActual = String(actual).replace(/\s+/g, '');
+            const normExpected = String(expected).replace(/\s+/g, '');
 
-            if (cleanExp === cleanAct) return true;
+            if (normActual === normExpected) return true;
 
-            // Equivalent operators matching logic (e.g. x = 15, y = 20 -> x [blank] y == False)
-            // If expected is '==', operators like '>', '>=' also produce False for 15 and 20!
-            if (cleanExp === '==') {
-                if (cleanAct === '>' || cleanAct === '>=') return true;
-            }
-            if (cleanExp === '!=') {
-                if (cleanAct === '<' || cleanAct === '<=') return true;
-            }
-            if (cleanExp === '>') {
-                if (cleanAct === '>=') return true;
-            }
-            if (cleanExp === '<') {
-                if (cleanAct === '<=') return true;
-            }
+            // Handle equivalent Python quotes
+            const quoteNormActual = normActual.replace(/'/g, '"');
+            const quoteNormExpected = normExpected.replace(/'/g, '"');
+            if (quoteNormActual === quoteNormExpected) return true;
 
             return false;
         }
 
-        // Submit Confirmation Modals
+        // Modal Confirmation Trigger
         function confirmSubmitExam() {
             document.getElementById('submitModal').classList.remove('hidden');
         }
@@ -827,7 +900,7 @@
             document.getElementById('submitModal').classList.add('hidden');
         }
 
-        // Grade and Record
+        // Grade Exam and Save Record
         function gradeAndSubmitExam() {
             closeSubmitModal();
 
@@ -835,20 +908,20 @@
             let correctBlanks = 0;
             const problemReviews = [];
 
-            currentExamSession.generatedProblems.forEach((prob, idx) => {
-                const studentAnsMap = currentExamSession.userAnswers[idx] || {};
+            currentExamSession.generatedProblems.forEach((prob, pIdx) => {
+                const userAnsMap = currentExamSession.userAnswers[pIdx] || {};
                 const blankResults = [];
 
-                Object.keys(prob.answers).forEach(key => {
+                Object.keys(prob.answers).forEach((blankKey) => {
                     totalBlanks++;
-                    const expected = prob.answers[key];
-                    const actual = studentAnsMap[key] || '';
+                    const expected = prob.answers[blankKey];
+                    const actual = userAnsMap[blankKey] || '';
+                    const isCorrect = isCorrectAnswer(actual, expected);
 
-                    const isCorrect = isCorrectAnswer(expected, actual);
                     if (isCorrect) correctBlanks++;
 
                     blankResults.push({
-                        key,
+                        blankKey,
                         expected,
                         actual: actual || '(미입력)',
                         isCorrect
@@ -857,6 +930,7 @@
 
                 problemReviews.push({
                     title: prob.title,
+                    category: prob.category,
                     blankResults
                 });
             });

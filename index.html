@@ -289,12 +289,20 @@
             <!-- Submissions Table -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 flex-1 flex flex-col">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-sm font-semibold text-slate-200">학생 제출 결과 목록</h3>
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-sm font-semibold text-slate-200">학생 제출 결과 목록</h3>
+                        <button onclick="switchTeacherTab('submissions')" id="tabBtnSubmissions" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500 text-white">
+                            제출 목록
+                        </button>
+                        <button onclick="switchTeacherTab('appeals')" id="tabBtnAppeals" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1">
+                            🙋‍♂️ 이의제기 관리 <span id="appealCountBadge" class="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px]">0</span>
+                        </button>
+                    </div>
                     <input type="text" id="inputTableSearch" oninput="renderSubmissionTable()" placeholder="학번/이름 검색..."
                         class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 w-48">
                 </div>
 
-                <div class="overflow-x-auto flex-1">
+                <div id="submissionsTableContainer" class="overflow-x-auto flex-1">
                     <table class="w-full text-left text-xs text-slate-300">
                         <thead class="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
                             <tr>
@@ -314,39 +322,53 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div id="appealsTableContainer" class="hidden overflow-x-auto flex-1">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-3">학번 / 이름</th>
+                                <th class="p-3">문항 / 작성답안</th>
+                                <th class="p-3">학생 이의제기 사유</th>
+                                <th class="p-3">상태</th>
+                                <th class="p-3 text-right">관리 승인</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appealTableBody" class="divide-y divide-slate-800/60">
+                            <!-- JS Dynamically rendered -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
     </main>
 
-    <!-- Modal: Config / Google Sheet Settings -->
-    <div id="configModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
-            <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                ⚙️ 시스템 및 구글 시트 연동 설정
+    <!-- Modal: Student Appeal Request -->
+    <div id="appealModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                🙋‍♂️ 답안 재검토 / 이의제기 신청
             </h3>
+            <p class="text-xs text-slate-400">선생님께 내가 입력한 답안이 정답인 이유를 간단히 적어 제출하세요.</p>
             
-            <div class="space-y-3">
-                <div>
-                    <label class="block text-xs font-medium text-slate-300 mb-1">구글 앱스 스크립트 웹앱 URL</label>
-                    <input type="text" id="inputConfigSheetUrl"
-                        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white code-font focus:outline-none focus:border-sky-500">
-                    <p class="text-[11px] text-slate-400 mt-1">Google Apps Script 배포 URL을 입력하면 실시간 자동 수합됩니다.</p>
-                </div>
+            <div class="space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
+                <div>문항: <span id="appealProblemTitle" class="font-bold text-white"></span></div>
+                <div>내 작성 답안: <span id="appealUserAnswer" class="font-mono text-rose-400 font-bold"></span></div>
+            </div>
 
-                <div>
-                    <label class="block text-xs font-medium text-slate-300 mb-1">교사 비밀번호 변경</label>
-                    <input type="password" id="inputConfigNewPassword" placeholder="새 비밀번호 (미입력 시 유지)"
-                        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
-                </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">이의제기 사유 (선생님께 전달할 내용)</label>
+                <textarea id="appealReasonInput" rows="3" placeholder="예: 작은따옴표를 썼지만 파이썬에서 문법적으로 완전히 동일하게 동작합니다."
+                    class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-sky-500"></textarea>
             </div>
 
             <div class="flex justify-end gap-2 pt-2">
-                <button onclick="closeConfigModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-medium">
+                <button onclick="closeAppealModal()" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs rounded-xl font-medium">
                     취소
                 </button>
-                <button onclick="saveConfigSettings()" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-xs rounded-xl font-bold">
-                    저장하기
+                <button onclick="submitStudentAppeal()" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-xs rounded-xl font-bold">
+                    이의제기 제출
                 </button>
             </div>
         </div>
@@ -387,11 +409,15 @@
         const KEY_SHEET_URL = "PYBLANK_SHEET_URL";
         const KEY_TEACHER_PW = "PYBLANK_TEACHER_PW";
         const KEY_SUBMISSIONS = "PYBLANK_SUBMISSIONS";
+        const KEY_APPEALS = "PYBLANK_APPEALS";
 
         // Global State
         let teacherPassword = localStorage.getItem(KEY_TEACHER_PW) || "1234";
         let googleSheetUrl = localStorage.getItem(KEY_SHEET_URL) || DEFAULT_GOOGLE_SHEET_URL;
         let submissions = JSON.parse(localStorage.getItem(KEY_SUBMISSIONS) || "[]");
+        let appeals = JSON.parse(localStorage.getItem(KEY_APPEALS) || "[]");
+        let activeAppealTarget = null;
+        let activeTeacherTab = 'submissions';
         let isTeacherAuthenticated = false;
 
         let currentExamSession = {
@@ -619,6 +645,45 @@
             
             // Default view
             switchView('studentLoginView');
+        }
+
+        // Handle Window Tab / Focus Leave Tracking
+        function handleVisibilityChange() {
+            if (document.hidden && currentExamSession.active) {
+                currentExamSession.leaveCount++;
+                const leaveCounterEl = document.getElementById('leaveCounter');
+                if (leaveCounterEl) {
+                    leaveCounterEl.textContent = `이탈: ${currentExamSession.leaveCount}회`;
+                }
+                showToast(`⚠️ [경고] 시험 화면을 이탈했습니다! (누적: ${currentExamSession.leaveCount}회)`);
+            }
+        }
+
+        // Timer Helper
+        function startTimer() {
+            if (currentExamSession.timerInterval) clearInterval(currentExamSession.timerInterval);
+            currentExamSession.timerInterval = setInterval(() => {
+                if (!currentExamSession.active) return;
+                const elapsedSec = Math.floor((Date.now() - currentExamSession.startTimeStamp) / 1000);
+                const min = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+                const sec = String(elapsedSec % 60).padStart(2, '0');
+                const timerEl = document.getElementById('examTimer');
+                if (timerEl) timerEl.textContent = `${min}:${sec}`;
+            }, 1000);
+        }
+
+        // Handle Teacher Login Authentication
+        function handleTeacherLogin(e) {
+            e.preventDefault();
+            const inputPw = document.getElementById('inputTeacherPassword').value.trim();
+            if (inputPw === teacherPassword) {
+                isTeacherAuthenticated = true;
+                document.getElementById('inputTeacherPassword').value = '';
+                switchView('teacherDashboardView');
+                showToast("👩‍🏫 교사 대시보드에 로그인했습니다.");
+            } else {
+                showToast("🔒 비밀번호가 올바르지 않습니다.");
+            }
         }
 
         // View Switcher Router
@@ -929,6 +994,7 @@
                 });
 
                 problemReviews.push({
+                    probId: prob.id,
                     title: prob.title,
                     category: prob.category,
                     blankResults
@@ -972,40 +1038,9 @@
             document.getElementById('examStatusHeader').classList.add('hidden');
             document.getElementById('examStatusHeader').classList.remove('flex');
             
-            // Hide navigation buttons upon submission to enforce clean exit screen
             document.getElementById('navModeButtons').classList.add('hidden');
 
-            document.getElementById('resultTitle').textContent = `${record.studentName}(${record.studentId}) 제출 결과`;
-            document.getElementById('resultScore').textContent = `${record.score}점`;
-            document.getElementById('resultCorrectCount').textContent = `${record.correctBlanks} / ${record.totalBlanks}`;
-            document.getElementById('resultDuration').textContent = record.duration;
-            document.getElementById('resultLeaveCount').textContent = `${record.leaveCount}회`;
-
-            const reviewList = document.getElementById('studentReviewList');
-            reviewList.innerHTML = '';
-
-            problemReviews.forEach((rev, i) => {
-                const card = document.createElement('div');
-                card.className = 'bg-slate-950 border border-slate-800 rounded-xl p-4';
-
-                const badgesHtml = rev.blankResults.map((b, bIdx) => {
-                    if (b.isCorrect) {
-                        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs code-font">
-                            #${bIdx + 1} 정답: <strong>${escapeHtml(b.expected)}</strong> ✓
-                        </span>`;
-                    } else {
-                        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs code-font">
-                            #${bIdx + 1} 내 답: <del>${escapeHtml(b.actual)}</del> → 정답: <strong class="text-emerald-400">${escapeHtml(b.expected)}</strong>
-                        </span>`;
-                    }
-                }).join(' ');
-
-                card.innerHTML = `
-                    <div class="text-sm font-bold text-white mb-2">문항 ${i + 1}. ${escapeHtml(rev.title)}</div>
-                    <div class="flex flex-wrap gap-2">${badgesHtml}</div>
-                `;
-                reviewList.appendChild(card);
-            });
+            renderStudentResultView(record);
 
             // Prevent history back
             if (window.history && window.history.pushState) {
@@ -1019,67 +1054,215 @@
             showToast("🎉 제출이 완료되었습니다!");
         }
 
-        // Send Record to Google Sheet Web App via POST
+        // Send payload to Google Sheets Web App
         function sendToGoogleSheet(record) {
             if (!googleSheetUrl) return;
+            
+            try {
+                fetch(googleSheetUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(record)
+                }).catch(err => {
+                    console.error("Google Sheet Sync Error:", err);
+                });
+            } catch (err) {
+                console.error("Google Sheet Payload Error:", err);
+            }
+        }
 
-            fetch(googleSheetUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(record)
-            }).then(() => {
-                console.log("Successfully sent data to Google Sheets.");
-            }).catch(err => {
-                console.error("Google Sheets sync error:", err);
+        // Render Student Result Page
+        function renderStudentResultView(record) {
+            document.getElementById('resultTitle').textContent = `${record.studentName}(${record.studentId}) 제출 결과`;
+            document.getElementById('resultScore').textContent = `${record.score}점`;
+            document.getElementById('resultCorrectCount').textContent = `${record.correctBlanks} / ${record.totalBlanks}`;
+            document.getElementById('resultDuration').textContent = record.duration;
+            document.getElementById('resultLeaveCount').textContent = `${record.leaveCount}회`;
+
+            const reviewList = document.getElementById('studentReviewList');
+            reviewList.innerHTML = '';
+
+            record.problemReviews.forEach((rev, i) => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-950 border border-slate-800 rounded-xl p-4';
+
+                const badgesHtml = rev.blankResults.map((b, bIdx) => {
+                    if (b.isCorrect) {
+                        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs code-font">
+                            #${bIdx + 1} 정답: <strong>${escapeHtml(b.expected)}</strong> ✓
+                        </span>`;
+                    } else {
+                        const appealExist = appeals.find(a => a.studentId === record.studentId && a.probTitle === rev.title && a.blankKey === b.blankKey);
+                        const appealStatusStr = appealExist ? ` <span class="text-amber-400 font-bold ml-1">(🙋‍♂️ 이의제기 접수됨)</span>` : '';
+
+                        return `<div class="flex items-center gap-2 flex-wrap mt-1">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs code-font">
+                                #${bIdx + 1} 내 답: <del>${escapeHtml(b.actual)}</del> → 정답: <strong class="text-emerald-400">${escapeHtml(b.expected)}</strong> ${appealStatusStr}
+                            </span>
+                            ${!appealExist ? `
+                            <button onclick="openAppealModal('${record.studentId}', '${record.studentName}', '${escapeHtml(rev.title)}', '${b.blankKey}', '${escapeHtml(b.actual)}', '${escapeHtml(b.expected)}')" 
+                                class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[11px] font-bold">
+                                🙋‍♂️ 이의제기
+                            </button>
+                            ` : ''}
+                        </div>`;
+                    }
+                }).join(' ');
+
+                card.innerHTML = `
+                    <div class="text-sm font-bold text-white mb-2">문항 ${i + 1}. ${escapeHtml(rev.title)}</div>
+                    <div class="flex flex-col gap-2">${badgesHtml}</div>
+                `;
+                reviewList.appendChild(card);
             });
         }
 
-        // Tab Window Leave Detection
-        function handleVisibilityChange() {
-            if (currentExamSession.active && document.hidden) {
-                currentExamSession.leaveCount++;
-                const el = document.getElementById('leaveCounter');
-                if (el) el.textContent = `이탈: ${currentExamSession.leaveCount}회`;
-                showToast(`⚠️ 경고: 시험 창을 이탈하셨습니다. (총 ${currentExamSession.leaveCount}회)`);
+        // Student Appeal Request Functions
+        function openAppealModal(studentId, studentName, probTitle, blankKey, userAns, expected) {
+            activeAppealTarget = { studentId, studentName, probTitle, blankKey, userAns, expected };
+            document.getElementById('appealProblemTitle').textContent = probTitle;
+            document.getElementById('appealUserAnswer').textContent = userAns;
+            document.getElementById('appealReasonInput').value = '';
+            document.getElementById('appealModal').classList.remove('hidden');
+        }
+
+        function closeAppealModal() {
+            document.getElementById('appealModal').classList.add('hidden');
+            activeAppealTarget = null;
+        }
+
+        function submitStudentAppeal() {
+            const reason = document.getElementById('appealReasonInput').value.trim();
+            if (!reason) {
+                showToast("이의제기 사유를 작성해주세요.");
+                return;
             }
+
+            const newAppeal = {
+                id: Date.now(),
+                studentId: activeAppealTarget.studentId,
+                studentName: activeAppealTarget.studentName,
+                probTitle: activeAppealTarget.probTitle,
+                blankKey: activeAppealTarget.blankKey,
+                userAns: activeAppealTarget.userAns,
+                expected: activeAppealTarget.expected,
+                reason,
+                status: 'PENDING' // PENDING, APPROVED
+            };
+
+            appeals.unshift(newAppeal);
+            localStorage.setItem(KEY_APPEALS, JSON.stringify(appeals));
+
+            closeAppealModal();
+            showToast("🙋‍♂️ 이의제기가 제출되었습니다. 선생님께서 확인 후 반영해주실 예정입니다.");
+
+            const rec = submissions.find(s => s.studentId === newAppeal.studentId);
+            if (rec) renderStudentResultView(rec);
         }
 
-        // Timer
-        function startTimer() {
-            if (currentExamSession.timerInterval) clearInterval(currentExamSession.timerInterval);
-            const timerEl = document.getElementById('examTimer');
+        // Teacher Tab Switcher
+        function switchTeacherTab(tabName) {
+            activeTeacherTab = tabName;
+            const btnSub = document.getElementById('tabBtnSubmissions');
+            const btnApp = document.getElementById('tabBtnAppeals');
+            const containerSub = document.getElementById('submissionsTableContainer');
+            const containerApp = document.getElementById('appealsTableContainer');
 
-            currentExamSession.timerInterval = setInterval(() => {
-                if (!currentExamSession.active) return;
-                const elapsedSec = Math.floor((Date.now() - currentExamSession.startTimeStamp) / 1000);
-                const min = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
-                const sec = String(elapsedSec % 60).padStart(2, '0');
-                if (timerEl) timerEl.textContent = `${min}:${sec}`;
-            }, 1000);
-        }
-
-        // Teacher Login Handler
-        function handleTeacherLogin(e) {
-            e.preventDefault();
-            const inputPw = document.getElementById('inputTeacherPassword').value;
-
-            if (inputPw === teacherPassword) {
-                isTeacherAuthenticated = true;
-                document.getElementById('inputTeacherPassword').value = '';
-                switchView('teacherDashboardView');
-                showToast("👩‍🏫 교사 대시보드에 로그인했습니다.");
+            if (tabName === 'submissions') {
+                btnSub.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500 text-white";
+                btnApp.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1";
+                containerSub.classList.remove('hidden');
+                containerApp.classList.add('hidden');
+                renderSubmissionTable();
             } else {
-                showToast("❌ 비밀번호가 올바르지 않습니다.");
+                btnApp.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500 text-white flex items-center gap-1";
+                btnSub.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-400 hover:text-white";
+                containerApp.classList.remove('hidden');
+                containerSub.classList.add('hidden');
+                renderAppealsTable();
             }
+        }
+
+        // Render Appeals Table for Teacher
+        function renderAppealsTable() {
+            const tbody = document.getElementById('appealTableBody');
+            tbody.innerHTML = '';
+
+            document.getElementById('appealCountBadge').textContent = appeals.filter(a => a.status === 'PENDING').length;
+
+            if (appeals.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">제출된 이의제기가 없습니다.</td></tr>`;
+                return;
+            }
+
+            appeals.forEach(a => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 transition-all";
+                tr.innerHTML = `
+                    <td class="p-3">
+                        <div class="font-bold text-white">${escapeHtml(a.studentName)}</div>
+                        <div class="text-[10px] font-mono text-slate-400">${escapeHtml(a.studentId)}</div>
+                    </td>
+                    <td class="p-3">
+                        <div class="font-medium text-slate-200">${escapeHtml(a.probTitle)}</div>
+                        <div class="text-[11px] text-rose-400 code-font">작성 답: ${escapeHtml(a.userAns)} (정답: ${escapeHtml(a.expected)})</div>
+                    </td>
+                    <td class="p-3 text-slate-300 max-w-xs break-words">${escapeHtml(a.reason)}</td>
+                    <td class="p-3">
+                        ${a.status === 'PENDING' 
+                            ? `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">검토 대기</span>` 
+                            : `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">⭕ 정답 승인됨</span>`}
+                    </td>
+                    <td class="p-3 text-right">
+                        ${a.status === 'PENDING' ? `
+                        <button onclick="approveAppeal(${a.id})" class="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm">
+                            ⭕ 정답 인정 (+점수)
+                        </button>
+                        ` : '<span class="text-slate-500 text-xs">처리 완료</span>'}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Teacher Approves Appeal
+        function approveAppeal(appealId) {
+            const appeal = appeals.find(a => a.id === appealId);
+            if (!appeal) return;
+
+            appeal.status = 'APPROVED';
+            localStorage.setItem(KEY_APPEALS, JSON.stringify(appeals));
+
+            // Recalculate student score
+            const studentRecord = submissions.find(s => s.studentId === appeal.studentId);
+            if (studentRecord) {
+                const rev = studentRecord.problemReviews.find(r => r.title === appeal.probTitle);
+                if (rev) {
+                    const blank = rev.blankResults.find(b => b.blankKey === appeal.blankKey);
+                    if (blank && !blank.isCorrect) {
+                        blank.isCorrect = true;
+                        studentRecord.correctBlanks++;
+                        studentRecord.score = Math.round((studentRecord.correctBlanks / studentRecord.totalBlanks) * 100);
+                        saveSubmissions();
+                        // Re-sync updated record to Google Sheets
+                        sendToGoogleSheet(studentRecord);
+                    }
+                }
+            }
+
+            renderDashboardStats();
+            renderAppealsTable();
+            showToast(`✅ [${appeal.studentName}] 학생의 이의제기가 정답 처리되었습니다!`);
         }
 
         // Render Dashboard Metrics
         function renderDashboardStats() {
             const total = submissions.length;
             document.getElementById('statTotalStudents').textContent = `${total}명`;
+            document.getElementById('appealCountBadge').textContent = appeals.filter(a => a.status === 'PENDING').length;
 
             if (total === 0) {
                 document.getElementById('statAvgScore').textContent = '0점';

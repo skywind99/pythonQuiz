@@ -125,7 +125,7 @@
                     <h2 class="text-2xl sm:text-3xl font-bold text-white mt-3" id="resultTitle">수고하셨습니다!</h2>
                     <p class="text-slate-400 text-sm mt-1">답안이 자동 채점되어 교사 대시보드 및 구글 시트로 실시간 전송되었습니다.</p>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto mt-6">
-                        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl"><div class="text-xs text-slate-400">최종 점수</div><div id="resultScore" class="text-2xl font-bold text-sky-400 mt-1">100점</div></div>
+                        <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl"><div class="text-xs text-slate-400">최종 점수 (문제당 1점)</div><div id="resultScore" class="text-2xl font-bold text-sky-400 mt-1">6 / 6점</div></div>
                         <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl"><div class="text-xs text-slate-400">맞힌 빈칸</div><div id="resultCorrectCount" class="text-2xl font-bold text-emerald-400 mt-1">12 / 12</div></div>
                         <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl"><div class="text-xs text-slate-400">소요 시간</div><div id="resultDuration" class="text-lg font-bold text-amber-400 mt-1">0분 0초</div></div>
                         <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl"><div class="text-xs text-slate-400">창 이탈 횟수</div><div id="resultLeaveCount" class="text-2xl font-bold text-rose-400 mt-1">0회</div></div>
@@ -202,7 +202,7 @@
                 </div>
  
                 <div id="appealsTableContainer" class="hidden overflow-x-auto flex-1">
-                    <p class="text-xs text-amber-400 mb-3">점수 조정은 구글 시트의 "최종점수" 칸을 직접 수정하세요. (12빈칸 기준 1칸 ≈ 8점)</p>
+                    <p class="text-xs text-amber-400 mb-3">점수 조정은 구글 시트의 "최종점수" 칸을 직접 수정하세요. (문제당 1점, 빈칸 2개 모두 정답이어야 함)</p>
                     <table class="w-full text-left text-xs text-slate-300">
                         <thead class="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
                             <tr><th class="p-3">학번 / 이름</th><th class="p-3">현재 점수</th><th class="p-3">이의제기 내용</th></tr>
@@ -259,7 +259,7 @@
         const KEY_SUBMISSIONS = "PYBLANK_SUBMISSIONS";
         const KEY_APPEALS = "PYBLANK_APPEALS";
  
-        let teacherPassword = localStorage.getItem(KEY_TEACHER_PW) || "14457";
+        let teacherPassword = localStorage.getItem(KEY_TEACHER_PW) || "1234";
         let googleSheetUrl = localStorage.getItem(KEY_SHEET_URL) || DEFAULT_GOOGLE_SHEET_URL;
         let submissions = JSON.parse(localStorage.getItem(KEY_SUBMISSIONS) || "[]");
         let appeals = JSON.parse(localStorage.getItem(KEY_APPEALS) || "[]");
@@ -566,14 +566,16 @@
                 problemReviews.push({ probId: prob.id, title: prob.title, category: prob.category, blankResults });
             });
  
-            const score = totalBlanks > 0 ? Math.round((correctBlanks / totalBlanks) * 100) : 0;
+            const totalProblems = problemReviews.length;
+            const correctProblems = problemReviews.filter(r => r.blankResults.every(b => b.isCorrect)).length;
+            const score = correctProblems; // 문제당 1점, 빈칸 모두 맞아야 정답
             const durationMs = Date.now() - currentExamSession.startTimeStamp;
             const durationStr = `${Math.floor(durationMs / 60000)}분 ${Math.floor((durationMs % 60000) / 1000)}초`;
  
             const record = {
                 studentId: currentExamSession.studentId,
                 studentName: currentExamSession.studentName,
-                score, correctBlanks, totalBlanks,
+                score, correctBlanks, totalBlanks, correctProblems, totalProblems,
                 leaveCount: currentExamSession.leaveCount,
                 startTime: currentExamSession.startTime,
                 submittedAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -615,7 +617,7 @@
         function renderStudentResultView(record) {
             currentResultRecord = record;
             document.getElementById('resultTitle').textContent = `${record.studentName}(${record.studentId}) 제출 결과`;
-            document.getElementById('resultScore').textContent = `${record.score}점`;
+            document.getElementById('resultScore').textContent = `${record.score} / ${record.totalProblems}점`;
             document.getElementById('resultCorrectCount').textContent = `${record.correctBlanks} / ${record.totalBlanks}`;
             document.getElementById('resultDuration').textContent = record.duration;
             document.getElementById('resultLeaveCount').textContent = `${record.leaveCount}회`;
@@ -638,7 +640,8 @@
                         ${!appealExist ? `<button onclick="openAppealModal(${i}, ${bIdx})" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[11px] font-bold">🙋‍♂️ 이의제기</button>` : ''}
                     </div>`;
                 }).join(' ');
-                card.innerHTML = `<div class="text-sm font-bold text-white mb-2">문항 ${i + 1}. ${escapeHtml(rev.title)}</div><div class="flex flex-col gap-2">${badgesHtml}</div>`;
+                const allOk = rev.blankResults.every(b => b.isCorrect);
+                card.innerHTML = `<div class="text-sm font-bold text-white mb-2 flex items-center gap-2">문항 ${i + 1}. ${escapeHtml(rev.title)} <span class="text-xs px-2 py-0.5 rounded ${allOk ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">${allOk ? '1점' : '0점'}</span></div><div class="flex flex-col gap-2">${badgesHtml}</div>`;
                 reviewList.appendChild(card);
             });
         }

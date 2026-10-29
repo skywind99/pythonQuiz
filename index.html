@@ -1160,7 +1160,11 @@
             showToast("🙋‍♂️ 이의제기가 제출되었습니다. 선생님께서 확인 후 반영해주실 예정입니다.");
 
             const rec = submissions.find(s => s.studentId === newAppeal.studentId);
-            if (rec) renderStudentResultView(rec);
+            if (rec) {
+                rec.appeals = appeals.filter(a => a.studentId === rec.studentId);
+                sendToGoogleSheet(rec);   // 이의제기 포함해서 같은 행 덮어쓰기
+                renderStudentResultView(rec);
+            }
         }
 
         // Teacher Tab Switcher
@@ -1248,6 +1252,7 @@
                         studentRecord.score = Math.round((studentRecord.correctBlanks / studentRecord.totalBlanks) * 100);
                         saveSubmissions();
                         // Re-sync updated record to Google Sheets
+                        studentRecord.appeals = appeals.filter(a => a.studentId === studentRecord.studentId);
                         sendToGoogleSheet(studentRecord);
                     }
                 }

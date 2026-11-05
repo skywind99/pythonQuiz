@@ -233,7 +233,16 @@
             </div>
         </div>
     </div>
- 
+ <!-- Teacher Appeal Detail Modal -->
+    <div id="teacherAppealModal" onclick="if(event.target===this)closeTeacherAppealModal()" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <h3 id="teacherAppealTitle" class="text-base font-bold text-white"></h3>
+                <button onclick="closeTeacherAppealModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+            </div>
+            <div id="teacherAppealBody" class="space-y-4"></div>
+        </div>
+    </div>
     <!-- Submit Modal -->
     <div id="submitModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4">
@@ -748,12 +757,12 @@
                     <td class="p-3 text-slate-400">${escapeHtml(s.submittedAt)}</td>
                     <td class="p-3 text-slate-400">${escapeHtml(s.duration)}</td>
                     <td class="p-3"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">${escapeHtml(s.category)}</span></td>
-                    <td class="p-3">${s.appealText ? '<span class="text-amber-400 font-bold">🙋‍♂️ 있음</span>' : '<span class="text-slate-600">-</span>'}</td>`;
+                    <td class="p-3">${s.appealText ? `<button data-sid="${escapeHtml(s.studentId)}" onclick="openTeacherAppealModal(this.dataset.sid)" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold">🙋‍♂️ 보기</button>` : '<span class="text-slate-600">-</span>'}</td>`;
                 tbody.appendChild(tr);
             });
         }
  
-        function renderAppealsTable() {
+                function renderAppealsTable() {
             const tbody = document.getElementById('appealTableBody');
             tbody.innerHTML = '';
             const list = submissions.filter(s => s.appealText);
@@ -762,15 +771,59 @@
                 return;
             }
             list.forEach(s => {
-                const items = s.appealText.split(' | ').map(t => `<div class="py-1">${escapeHtml(t)}</div>`).join('');
+                const items = parseAppeals(s.appealText).map(ap => ap.raw
+                    ? `<div class="py-1">${escapeHtml(ap.raw)}</div>`
+                    : `<div class="py-1"><span class="text-white">${escapeHtml(ap.probTitle)}</span> · 사유: ${escapeHtml(ap.reason)}</div>`).join('');
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-800/40 transition-all align-top";
+                tr.className = "hover:bg-slate-800/40 transition-all align-top cursor-pointer";
+                tr.onclick = () => openTeacherAppealModal(s.studentId);
                 tr.innerHTML = `
                     <td class="p-3"><div class="font-bold text-white">${escapeHtml(s.studentName)}</div><div class="text-[10px] font-mono text-slate-400">${escapeHtml(s.studentId)}</div></td>
                     <td class="p-3 font-bold text-sky-400">${s.score}점 (${s.correctBlanks}/${s.totalBlanks})</td>
-                    <td class="p-3 text-slate-300 break-words">${items}</td>`;
+                    <td class="p-3 text-slate-300 break-words">${items}<div class="text-[10px] text-amber-400 mt-1">클릭하여 상세 보기 ▶</div></td>`;
                 tbody.appendChild(tr);
             });
+        }
+
+        // 시트 형식: "[제목 / BLANK_n] 작성답: 답 → 사유: 사유" 를 " | "로 연결
+        function parseAppeals(text) {
+            return String(text).split(' | ').map(t => {
+                const m = t.match(/^\[(.+) \/ (BLANK_\d+)\] 작성답: ([\s\S]*?) → 사유: ([\s\S]*)$/);
+                return m ? { probTitle: m[1], blankKey: m[2], userAns: m[3], reason: m[4] } : { raw: t };
+            });
+        }
+
+        function openTeacherAppealModal(studentId) {
+            const s = submissions.find(x => x.studentId === studentId);
+            if (!s || !s.appealText) return;
+            document.getElementById('teacherAppealTitle').textContent = `🙋‍♂️ ${s.studentName}(${s.studentId}) 이의제기 · 현재 ${s.score}점`;
+            document.getElementById('teacherAppealBody').innerHTML = parseAppeals(s.appealText).map(ap => {
+                if (ap.raw) return `<div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-300">${escapeHtml(ap.raw)}</div>`;
+                const prob = DEFAULT_PROBLEMS.find(p => p.title === ap.probTitle);
+                const blankNo = ap.blankKey.split('_')[1];
+                const expected = prob ? prob.answers[ap.blankKey] : '(문제 정보 없음)';
+                const codeHtml = prob
+                    ? escapeHtml(prob.code).replace(/___(BLANK_\d+)___/g, (_, k) => k === ap.blankKey
+                        ? `<span class="px-1.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">[빈칸 ${blankNo}]</span>`
+                        : `<span class="text-slate-500">[빈칸 ${k.split('_')[1]}]</span>`)
+                    : '(문제 코드를 찾을 수 없습니다)';
+                return `
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <div class="text-sm font-bold text-white">${escapeHtml(ap.probTitle)} <span class="text-xs font-normal text-amber-400">· 빈칸 ${blankNo}</span></div>
+                    ${prob ? `<p class="text-xs text-slate-400">${escapeHtml(prob.desc)}</p>` : ''}
+                    <pre class="bg-slate-900 border border-slate-800 rounded-lg p-3 code-font text-sm text-slate-100 whitespace-pre overflow-x-auto">${codeHtml}</pre>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-rose-500/10 border border-rose-500/30 rounded-lg p-2"><div class="text-[10px] text-rose-400 mb-1">학생 답</div><div class="code-font text-rose-300 font-bold break-all">${escapeHtml(ap.userAns)}</div></div>
+                        <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2"><div class="text-[10px] text-emerald-400 mb-1">정답</div><div class="code-font text-emerald-300 font-bold break-all">${escapeHtml(expected)}</div></div>
+                    </div>
+                    <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 text-xs"><div class="text-[10px] text-amber-400 mb-1">이의제기 사유</div><div class="text-slate-200 whitespace-pre-wrap">${escapeHtml(ap.reason)}</div></div>
+                </div>`;
+            }).join('');
+            document.getElementById('teacherAppealModal').classList.remove('hidden');
+        }
+
+        function closeTeacherAppealModal() {
+            document.getElementById('teacherAppealModal').classList.add('hidden');
         }
  
         function configureSheetUrl() {

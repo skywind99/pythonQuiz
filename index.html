@@ -817,6 +817,7 @@
                     <div class="text-sm font-bold text-white">${escapeHtml(ap.probTitle)} <span class="text-xs font-normal text-amber-400">· 빈칸 ${blankNo}</span></div>
                     ${prob ? `<p class="text-xs text-slate-400">${escapeHtml(prob.desc)}</p>` : ''}
                     <pre class="bg-slate-900 border border-slate-800 rounded-lg p-3 code-font text-sm text-slate-100 whitespace-pre overflow-x-auto">${codeHtml}</pre>
+                    ${stdoutHtml(prob)}
                     <div class="grid grid-cols-2 gap-2 text-xs">
                         <div class="bg-rose-500/10 border border-rose-500/30 rounded-lg p-2"><div class="text-[10px] text-rose-400 mb-1">학생 답</div><div class="code-font text-rose-300 font-bold break-all">${escapeHtml(ap.userAns)}</div></div>
                         <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2"><div class="text-[10px] text-emerald-400 mb-1">정답</div><div class="code-font text-emerald-300 font-bold break-all">${escapeHtml(expected)}</div></div>
@@ -829,6 +830,13 @@
 
         function closeTeacherAppealModal() {
             document.getElementById('teacherAppealModal').classList.add('hidden');
+        }
+        function stdoutHtml(prob) {
+            if (!prob || !prob.stdout) return '';
+            return `<div class="bg-slate-900/60 border border-slate-800 rounded-lg p-3">
+                <span class="text-[10px] text-emerald-400 font-mono block mb-1">▶ 실행 출력 결과</span>
+                <pre class="code-font text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(prob.stdout)}</pre>
+            </div>`;
         }
         function openStudentDetailModal(studentId) {
             const s = submissions.find(x => x.studentId === studentId);
@@ -871,6 +879,7 @@
                             <span class="text-xs px-2 py-0.5 rounded ${allOk ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">${allOk ? '1점' : '0점'}</span></div>
                         <p class="text-xs text-slate-400">${escapeHtml(prob.desc)}</p>
                         <pre class="bg-slate-900 border border-slate-800 rounded-lg p-3 code-font text-sm text-slate-100 whitespace-pre overflow-x-auto">${codeHtml}</pre>
+                        ${stdoutHtml(prob)}
                         <div class="space-y-1">${rows}</div>
                     </div>`;
                 }).join('');
